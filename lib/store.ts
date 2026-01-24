@@ -73,6 +73,8 @@ interface AppState {
   deleteChatHistory: (id: string) => void
   resetGame: () => void
   goToHome: () => void
+  generationJobId: string | null
+  setGenerationJobId: (id: string | null) => void
 }
 
 export const useAppStore = create<AppState>()(
@@ -100,6 +102,8 @@ export const useAppStore = create<AppState>()(
       setScenario: (scenario) => set({ scenario }),
       generatedScript: "",
       setGeneratedScript: (script) => set({ generatedScript: script }),
+      generationJobId: null,
+      setGenerationJobId: (id) => set({ generationJobId: id }),
       messages: [],
       addMessage: (message) =>
         set((state) => ({ messages: [...state.messages, message] })),
@@ -113,15 +117,15 @@ export const useAppStore = create<AppState>()(
       saveChatHistory: () => {
         const state = get()
         const { scenario, messages, turnCount, currentChatId, chatHistories, generatedScript, displayName } = state
-        
+
         if (messages.length === 0) return
-        
+
         const now = new Date()
-        
+
         if (currentChatId) {
           // Update existing
-          const updated = chatHistories.map(h => 
-            h.id === currentChatId 
+          const updated = chatHistories.map(h =>
+            h.id === currentChatId
               ? { ...h, messages, turnCount, updatedAt: now, generatedScript, displayName }
               : h
           )
@@ -138,7 +142,7 @@ export const useAppStore = create<AppState>()(
             generatedScript,
             displayName,
           }
-          set({ 
+          set({
             chatHistories: [newHistory, ...chatHistories],
             currentChatId: newHistory.id
           })

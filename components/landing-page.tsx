@@ -1,4 +1,5 @@
-"use client"
+
+import { signIn } from "next-auth/react"
 
 import React from "react"
 
@@ -8,12 +9,12 @@ import { useAppStore } from "@/lib/store"
 import { Theater, Sparkles, User, Trash2, Clock, MapPin } from "lucide-react"
 
 export function LandingPage() {
-  const { 
+  const {
     step,
-    setStep, 
-    setIsLoggedIn, 
-    setUserName, 
-    isLoggedIn, 
+    setStep,
+    setIsLoggedIn,
+    setUserName,
+    isLoggedIn,
     userName,
     chatHistories,
     loadChatHistory,
@@ -21,10 +22,15 @@ export function LandingPage() {
   } = useAppStore()
   const [showHistory, setShowHistory] = useState(false)
 
-  const handleGoogleLogin = () => {
-    setIsLoggedIn(true)
-    setUserName("Guest User")
-    setStep("mode-select")
+  const handleGoogleLogin = async () => {
+    // NextAuth 로그인
+    // 클라이언트 컴포넌트에서 signIn 호출 (패키지 설치 필요할 수도 있으나, 여기서는 signIn("google")을 사용)
+    // 하지만 "next-auth/react"의 signIn은 클라이언트 사이드에서 사용 가능.
+    // 현재 "next-auth/react"가 설치되어 있는지 확인 필요.
+    // 만약 "next-auth/react"가 없다면, form action으로 처리하거나 redirect 필요.
+    // 편의상 위에서 만든 SignIn 컴포넌트를 사용하거나, 여기서 직접 폼 서밋을 유도.
+    // 가장 깔끔한 방법은 next-auth/react의 signIn 함수 사용.
+    await signIn("google", { callbackUrl: "/" })
   }
 
   const handleContinueChat = (id: string) => {
@@ -121,11 +127,11 @@ export function LandingPage() {
         <div className="flex items-center justify-center gap-3 mb-4">
           <Theater className="h-16 w-16 text-primary" />
         </div>
-        
+
         <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-foreground">
           인생 극장
         </h1>
-        
+
         <p className="text-lg md:text-xl text-muted-foreground max-w-md mx-auto leading-relaxed">
           AI와 함께하는 몰입형 롤플레이 학습 플랫폼
         </p>

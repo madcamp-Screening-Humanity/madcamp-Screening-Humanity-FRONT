@@ -5,12 +5,15 @@ import React from "react"
 import { useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { useAppStore } from "@/lib/store"
-import { Upload, X, Camera, User, ArrowLeft } from "lucide-react"
+import { Upload, X, Camera, User, ArrowLeft, Loader2 } from "lucide-react"
+import { generationApi } from "@/lib/api/client"
 
 export function AvatarUpload() {
-  const { step, setStep, setUploadedImage, setAvatarUrl } = useAppStore()
+  const { step, setStep, setUploadedImage, setAvatarUrl, setGenerationJobId } = useAppStore()
   const [dragActive, setDragActive] = useState(false)
   const [preview, setPreview] = useState<string | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
   const isVisible = step === "avatar-upload"
 
@@ -36,6 +39,7 @@ export function AvatarUpload() {
 
   const handleFile = (file: File) => {
     if (file.type.startsWith("image/")) {
+      setSelectedFile(file)
       const reader = new FileReader()
       reader.onload = (e) => {
         const result = e.target?.result as string
@@ -52,8 +56,26 @@ export function AvatarUpload() {
     }
   }
 
-  const handleContinue = () => {
-    setStep("avatar-preview")
+  const handleContinue = async () => {
+    if (!selectedFile) return
+
+    try {
+      setIsUploading(true)
+      // Call Generation API
+      const response = await generationApi.generateCharacter(selectedFile)
+
+      if (response.success && response.data) {
+        setGenerationJobId(response.data.job_id)
+        setStep("avatar-preview")
+      } else {
+        console.error("Failed to start generation:", response.error)
+        // TODO: Show error toast
+      }
+    } catch (error) {
+      console.error("Error starting generation:", error)
+    } finally {
+      setIsUploading(false)
+    }
   }
 
   const handleSkip = () => {
@@ -118,6 +140,7 @@ export function AvatarUpload() {
                 className="w-full py-6 text-lg bg-primary text-primary-foreground hover:bg-primary/90"
               >
                 3D 변환하기
+                {isUploading && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
               </Button>
             </div>
           ) : (
@@ -126,11 +149,10 @@ export function AvatarUpload() {
               onDragLeave={handleDrag}
               onDragOver={handleDrag}
               onDrop={handleDrop}
-              className={`relative border-2 border-dashed rounded-2xl p-12 transition-all ${
-                dragActive
+              className={`relative border-2 border-dashed rounded-2xl p-12 transition-all ${dragActive
                   ? "border-primary bg-primary/10"
                   : "border-border bg-secondary/30 hover:border-muted-foreground"
-              }`}
+                }`}
             >
               <input
                 type="file"
