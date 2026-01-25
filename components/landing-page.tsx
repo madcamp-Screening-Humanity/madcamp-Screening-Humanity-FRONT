@@ -1,12 +1,12 @@
-
-import { signIn } from "next-auth/react"
+"use client"
 
 import React from "react"
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { useAppStore } from "@/lib/store"
-import { Theater, Sparkles, User, Trash2, Clock, MapPin } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { Theater, Sparkles, User, Trash2, Clock, MapPin, LogOut } from "lucide-react"
 
 export function LandingPage() {
   const {
@@ -19,18 +19,43 @@ export function LandingPage() {
     chatHistories,
     loadChatHistory,
     deleteChatHistory,
+    goToHome,
   } = useAppStore()
   const [showHistory, setShowHistory] = useState(false)
+  const router = useRouter()
+  
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
-  const handleGoogleLogin = async () => {
-    // NextAuth 로그인
-    // 클라이언트 컴포넌트에서 signIn 호출 (패키지 설치 필요할 수도 있으나, 여기서는 signIn("google")을 사용)
-    // 하지만 "next-auth/react"의 signIn은 클라이언트 사이드에서 사용 가능.
-    // 현재 "next-auth/react"가 설치되어 있는지 확인 필요.
-    // 만약 "next-auth/react"가 없다면, form action으로 처리하거나 redirect 필요.
-    // 편의상 위에서 만든 SignIn 컴포넌트를 사용하거나, 여기서 직접 폼 서밋을 유도.
-    // 가장 깔끔한 방법은 next-auth/react의 signIn 함수 사용.
-    await signIn("google", { callbackUrl: "/" })
+  const handleGoogleLogin = () => {
+    // Backend OAuth URL로 직접 이동
+    window.location.href = `${API_BASE_URL}/api/auth/google/login`
+  }
+
+  const handleLogout = async () => {
+    try {
+      // Backend 로그아웃 엔드포인트 호출
+      const response = await fetch(`${API_BASE_URL}/api/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      })
+
+      if (response.ok || response.redirected) {
+        // Zustand store 초기화
+        setIsLoggedIn(false)
+        setUserName("")
+        goToHome()
+        
+        // 랜딩 페이지로 리다이렉트 (이미 랜딩 페이지이지만 상태 초기화를 위해)
+        router.push("/")
+      }
+    } catch (error) {
+      console.error("Logout error:", error)
+      // 에러가 발생해도 로컬 상태는 초기화
+      setIsLoggedIn(false)
+      setUserName("")
+      goToHome()
+      router.push("/")
+    }
   }
 
   const handleContinueChat = (id: string) => {
@@ -59,15 +84,37 @@ export function LandingPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background px-4 relative">
-      {/* Profile Button */}
-      {isLoggedIn && chatHistories.length > 0 && (
-        <button
-          onClick={() => setShowHistory(!showHistory)}
-          className="absolute top-6 right-6 p-3 rounded-full bg-card border border-border hover:bg-secondary transition-colors"
-          title="내 기록"
-        >
-          <User className="h-5 w-5 text-foreground" />
-        </button>
+      {/* User Info and Logout Button */}
+      {isLoggedIn && (
+        <div className="absolute top-6 right-6 flex items-center gap-3">
+          {/* Profile Button (채팅 기록이 있을 때만 표시) */}
+          {chatHistories.length > 0 && (
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              className="p-3 rounded-full bg-card border border-border hover:bg-secondary transition-colors"
+              title="내 기록"
+            >
+              <User className="h-5 w-5 text-foreground" />
+            </button>
+          )}
+          
+          {/* User Info and Logout */}
+          <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-card border border-border">
+            {userName && (
+              <span className="text-sm text-foreground font-medium">
+                {userName}
+              </span>
+            )}
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-secondary transition-colors text-sm text-muted-foreground hover:text-foreground"
+              title="로그아웃"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>로그아웃</span>
+            </button>
+          </div>
+        </div>
       )}
 
       {/* History Panel */}

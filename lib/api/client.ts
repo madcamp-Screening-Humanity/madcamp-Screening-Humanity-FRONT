@@ -18,7 +18,8 @@ import type {
 
 // API Base URL - 환경변수에서 가져오거나 기본값 사용
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-const API_V1 = `${API_BASE_URL}/api/v1`;
+// API 경로 통일: Backend와 동일하게 `/api` 사용
+const API_V1 = `${API_BASE_URL}/api`;
 
 // ============ 유틸리티 함수 ============
 async function handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
@@ -40,6 +41,7 @@ export const chatApi = {
         const response = await fetch(`${API_V1}/chat`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',  // 쿠키 자동 전달
             body: JSON.stringify(request),
         });
         return handleResponse<ChatResponse>(response);
@@ -49,7 +51,9 @@ export const chatApi = {
      * 사용 가능한 모델 목록 조회
      */
     async listModels(): Promise<ApiResponse<{ models: ModelInfo[] }>> {
-        const response = await fetch(`${API_V1}/chat/models`);
+        const response = await fetch(`${API_V1}/chat/models`, {
+            credentials: 'include',  // 쿠키 자동 전달
+        });
         return handleResponse(response);
     },
 };
@@ -63,6 +67,7 @@ export const ttsApi = {
         const response = await fetch(`${API_V1}/tts`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',  // 쿠키 자동 전달
             body: JSON.stringify(request),
         });
         return handleResponse<TTSResponse>(response);
@@ -72,7 +77,9 @@ export const ttsApi = {
      * 사용 가능한 음성 목록 조회
      */
     async listVoices(): Promise<ApiResponse<{ voices: Voice[] }>> {
-        const response = await fetch(`${API_V1}/tts/voices`);
+        const response = await fetch(`${API_V1}/tts/voices`, {
+            credentials: 'include',  // 쿠키 자동 전달
+        });
         return handleResponse(response);
     },
 
@@ -100,6 +107,7 @@ export const generationApi = {
 
         const response = await fetch(`${API_V1}/generate`, {
             method: 'POST',
+            credentials: 'include',  // 쿠키 자동 전달
             body: formData,
         });
         return handleResponse<GenerationResponse>(response);
@@ -167,6 +175,7 @@ export const styleApi = {
 
         const response = await fetch(`${API_V1}/style/transform`, {
             method: 'POST',
+            credentials: 'include',  // 쿠키 자동 전달
             body: formData,
         });
         return handleResponse<StyleTransferResponse>(response);
@@ -215,7 +224,9 @@ export const animationApi = {
      * 사용 가능한 애니메이션 목록 조회
      */
     async listAnimations(): Promise<ApiResponse<AnimationsResponse>> {
-        const response = await fetch(`${API_V1}/animations`);
+        const response = await fetch(`${API_V1}/animations`, {
+            credentials: 'include',  // 쿠키 자동 전달
+        });
         return handleResponse<AnimationsResponse>(response);
     },
 
@@ -237,6 +248,7 @@ export const storyApi = {
         const response = await fetch(`${API_V1}/story/generate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',  // 쿠키 자동 전달
             body: JSON.stringify(request),
         });
         return handleResponse<StoryResponse>(response);
@@ -249,7 +261,9 @@ export const systemApi = {
      * 시스템 상태 조회
      */
     async getStatus(): Promise<ApiResponse<SystemStatus>> {
-        const response = await fetch(`${API_V1}/system/status`);
+        const response = await fetch(`${API_V1}/system/status`, {
+            credentials: 'include',  // 쿠키 자동 전달
+        });
         return handleResponse<SystemStatus>(response);
     },
 
@@ -257,7 +271,9 @@ export const systemApi = {
      * 헬스 체크
      */
     async healthCheck(): Promise<ApiResponse<{ status: string }>> {
-        const response = await fetch(`${API_V1}/system/health`);
+        const response = await fetch(`${API_V1}/system/health`, {
+            credentials: 'include',  // 쿠키 자동 전달
+        });
         return handleResponse(response);
     },
 };
