@@ -14,7 +14,7 @@ export default function Home() {
   const { step, isLoggedIn } = useAppStore()
 
   return (
-    <main className="min-h-screen bg-background">
+    <main className="min-h-screen bg-background" suppressHydrationWarning>
       {/* Landing - shown when not logged in */}
       {step === "landing" && <LandingPage />}
 

@@ -81,9 +81,32 @@
 }
 
 @layer base {
+  /* Hydration error 방지: 모든 요소에 user-select를 명시적으로 설정 */
+  /* 브라우저 확장 프로그램이 인라인 스타일을 추가하더라도 CSS로 강제 설정 */
+  html,
+  html *,
+  html *::before,
+  html *::after {
+    user-select: auto !important;
+    -webkit-user-select: auto !important;
+    -moz-user-select: auto !important;
+    -ms-user-select: auto !important;
+  }
+  
+  /* SVG 요소에도 적용 */
+  svg,
+  svg *,
+  path {
+    user-select: auto !important;
+    -webkit-user-select: auto !important;
+    -moz-user-select: auto !important;
+    -ms-user-select: auto !important;
+  }
+  
   * {
     @apply border-border outline-ring/50;
   }
+  
   body {
     @apply bg-background text-foreground;
   }

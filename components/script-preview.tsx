@@ -110,7 +110,7 @@ ${finalName}(으)로서 자연스럽게 대화를 이어가세요.
   if (!isVisible) return null
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="min-h-screen flex flex-col bg-background" suppressHydrationWarning>
       <header className="p-4 border-b border-border flex items-center justify-between">
         <Button
           variant="ghost"

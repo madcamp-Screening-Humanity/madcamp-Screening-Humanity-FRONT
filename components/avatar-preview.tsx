@@ -119,7 +119,7 @@ export function AvatarPreview() {
   if (!isVisible) return null
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="min-h-screen flex flex-col bg-background" suppressHydrationWarning>
       <header className="p-4 border-b border-border flex items-center justify-between">
         <Button
           variant="ghost"

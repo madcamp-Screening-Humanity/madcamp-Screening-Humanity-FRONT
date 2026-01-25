@@ -12,7 +12,7 @@ import { useAppStore } from "@/lib/store"
 import { User, Users, Sparkles } from "lucide-react"
 
 export function ModeSelectModal() {
-  const { step, setStep, setGameMode } = useAppStore()
+  const { step, setStep, setGameMode, goToHome } = useAppStore()
   const isOpen = step === "mode-select"
 
   const handleSelectMode = (mode: "actor" | "director") => {
@@ -24,8 +24,17 @@ export function ModeSelectModal() {
     }
   }
 
+  const handleClose = () => {
+    // X 버튼 클릭 시 랜딩 페이지로 이동
+    goToHome()
+  }
+
   return (
-    <Dialog open={isOpen}>
+    <Dialog open={isOpen} onOpenChange={(open) => {
+      if (!open) {
+        handleClose()
+      }
+    }}>
       <DialogContent className="sm:max-w-lg bg-card border-border">
         <DialogHeader className="text-center">
           <DialogTitle className="text-2xl font-bold text-foreground flex items-center justify-center gap-2">

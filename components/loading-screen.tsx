@@ -52,7 +52,7 @@ export function LoadingScreen() {
   const CurrentIcon = loadingSteps[currentStep].icon
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background px-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background px-4" suppressHydrationWarning>
       <div className="max-w-md w-full text-center space-y-8">
         <div className="relative">
           <div className="w-24 h-24 mx-auto rounded-full bg-primary/10 flex items-center justify-center">

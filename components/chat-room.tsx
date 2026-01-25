@@ -186,7 +186,7 @@ export function ChatRoom() {
   if (!isVisible) return null
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="min-h-screen flex flex-col bg-background" suppressHydrationWarning>
       {/* Header */}
       <header className="p-4 border-b border-border flex items-center justify-between bg-card">
         <div>
