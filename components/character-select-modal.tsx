@@ -23,7 +23,7 @@ const CharacterCreationWizard = lazy(() =>
 )
 
 export function CharacterSelectModal() {
-  const { step, setStep, gameMode, setSelectedCharacter } = useAppStore()
+  const { step, setStep, gameMode, setSelectedCharacter, selectedCharacter, secondCharacter, setSecondCharacter } = useAppStore()
   const { toast } = useToast()
   const isOpen = step === "character-select"
 
@@ -37,9 +37,8 @@ export function CharacterSelectModal() {
   const [showWizard, setShowWizard] = useState(false)
   const [editingCharacter, setEditingCharacter] = useState<Character | null>(null)
 
-  // 감독 모드용: 2개 캐릭터 선택
+  // 감독 모드용: 첫 번째 캐릭터는 로컬 state로 관리 (선택 중인 상태)
   const [firstCharacter, setFirstCharacter] = useState<Character | null>(null)
-  const [secondCharacter, setSecondCharacter] = useState<Character | null>(null)
 
   const loadPresetCharacters = useCallback(async () => {
     setLoading(true)
@@ -134,6 +133,7 @@ export function CharacterSelectModal() {
     if (gameMode === "actor") {
       // 주연 모드: 1개 캐릭터만 선택하고 바로 진행
       setSelectedCharacter(character)
+      setSecondCharacter(null) // 주연 모드에서는 두 번째 캐릭터 초기화
       setStep("scenario-setup")
     } else if (gameMode === "director") {
       // 감독 모드: 2개 캐릭터 선택 필요
@@ -156,6 +156,7 @@ export function CharacterSelectModal() {
         setSecondCharacter(character)
         // 첫 번째 캐릭터를 주 캐릭터로 설정
         setSelectedCharacter(firstCharacter)
+        setFirstCharacter(null) // 로컬 state 초기화
         toast({
           title: "캐릭터 선택 완료",
           description: `${firstCharacter.name}과(와) ${character.name}이(가) 선택되었습니다.`,
@@ -164,7 +165,7 @@ export function CharacterSelectModal() {
         setStep("scenario-setup")
       }
     }
-  }, [gameMode, firstCharacter, setSelectedCharacter, setStep, toast])
+  }, [gameMode, firstCharacter, setSelectedCharacter, setSecondCharacter, setStep, toast])
 
   const handleWizardComplete = useCallback((character: Character) => {
     setSelectedCharacter(character)
@@ -308,12 +309,14 @@ export function CharacterSelectModal() {
             {gameMode === "director" && (
               <div className="mb-4 p-3 bg-primary/10 rounded-lg border border-primary/20">
                 <p className="text-sm text-foreground">
-                  {!firstCharacter ? (
+                  {!firstCharacter && !selectedCharacter ? (
                     <span>🎭 첫 번째 캐릭터를 선택해주세요</span>
-                  ) : !secondCharacter ? (
+                  ) : firstCharacter && !secondCharacter ? (
                     <span>✅ <strong>{firstCharacter.name}</strong> 선택됨 → 두 번째 캐릭터를 선택해주세요</span>
+                  ) : selectedCharacter && secondCharacter ? (
+                    <span>✅ <strong>{selectedCharacter.name}</strong>과(와) <strong>{secondCharacter.name}</strong> 선택 완료!</span>
                   ) : (
-                    <span>✅ 선택 완료!</span>
+                    <span>🎭 첫 번째 캐릭터를 선택해주세요</span>
                   )}
                 </p>
               </div>
@@ -337,7 +340,7 @@ export function CharacterSelectModal() {
                         character={character}
                         isSelected={
                           gameMode === "director"
-                            ? firstCharacter?.id === character.id || secondCharacter?.id === character.id
+                            ? firstCharacter?.id === character.id || selectedCharacter?.id === character.id || secondCharacter?.id === character.id
                             : selectedCharacterId === character.id
                         }
                         onClick={() => handleCharacterSelect(character)}
@@ -372,7 +375,7 @@ export function CharacterSelectModal() {
                         character={character}
                         isSelected={
                           gameMode === "director"
-                            ? firstCharacter?.id === character.id || secondCharacter?.id === character.id
+                            ? firstCharacter?.id === character.id || selectedCharacter?.id === character.id || secondCharacter?.id === character.id
                             : selectedCharacterId === character.id
                         }
                         onClick={() => handleCharacterSelect(character)}

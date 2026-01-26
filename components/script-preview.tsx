@@ -28,6 +28,8 @@ export function ScriptPreview() {
     setGeneratedScript,
     generatedScript,
     selectedCharacter,
+    secondCharacter,
+    gameMode,
   } = useAppStore()
   const [isGenerating, setIsGenerating] = useState(false)
   const [script, setScript] = useState("")
@@ -48,24 +50,67 @@ export function ScriptPreview() {
 
   const generateScript = async () => {
     // 기본 데이터 검증
-    const opponentName = scenario.opponent || selectedCharacter?.name || "상대역"
     const currentSituation = scenario.situation || "상황이 입력되지 않았습니다."
     const finalName = customName || displayName || userName || "주인공"
+    const isDirectorMode = gameMode === "director"
 
     setIsGenerating(true)
 
     try {
-      const response = await storyApi.analyzeSituation({
-        situation: currentSituation,
-        opponent_name: opponentName,
-        character_persona: selectedCharacter?.persona || ""
-      })
+      let response
+      
+      if (isDirectorMode && selectedCharacter && secondCharacter) {
+        // 감독 모드: 2명의 캐릭터 정보 전송
+        response = await storyApi.analyzeSituation({
+          mode: "director",
+          situation: currentSituation,
+          character1_name: selectedCharacter.name,
+          character1_persona: selectedCharacter.persona || "",
+          character2_name: secondCharacter.name,
+          character2_persona: secondCharacter.persona || "",
+        })
+      } else {
+        // 주연 모드: 상대역 정보 전송
+        const opponentName = scenario.opponent || selectedCharacter?.name || "상대역"
+        response = await storyApi.analyzeSituation({
+          mode: "actor",
+          situation: currentSituation,
+          opponent_name: opponentName,
+          character_persona: selectedCharacter?.persona || ""
+        })
+      }
 
       if (response.success && response.data) {
         // plot 필드 우선 사용, 없으면 story 필드 확인 (하위 호환)
         const plot = (response.data as any).plot || (response.data as any).story || currentSituation
 
-        const generatedText = `[ 상황 설명 ]
+        let generatedText: string
+        
+        if (isDirectorMode && selectedCharacter && secondCharacter) {
+          // 감독 모드: 두 캐릭터가 대화
+          generatedText = `[ 상황 설명 ]
+
+등장인물: ${selectedCharacter.name}, ${secondCharacter.name}
+
+---
+
+${plot}
+
+---
+
+[ 연극 시작 ]
+
+${selectedCharacter.name}과(와) ${secondCharacter.name}의 역할을 맡은 AI들이 자동으로 대화를 시작합니다.
+감독으로서 대화의 흐름을 관전하세요.
+
+목표: 주어진 상황에서 두 캐릭터가 자연스럽게 대화를 이어가도록 합니다.
+제한: 30턴 이내에 대화를 마무리해야 합니다.
+
+행운을 빕니다!`
+        } else {
+          // 주연 모드: 사용자가 직접 참여
+          const opponentName = scenario.opponent || selectedCharacter?.name || "상대역"
+          generatedText = `[ 상황 설명 ]
 
 등장인물: ${finalName} (나), ${opponentName}
 
@@ -84,6 +129,7 @@ ${finalName}(으)로서 자연스럽게 대화를 이어가세요.
 제한: 30턴 이내에 대화를 마무리해야 합니다.
 
 행운을 빕니다!`
+        }
 
         setScript(generatedText)
         setGeneratedScript(generatedText)

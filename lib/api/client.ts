@@ -325,9 +325,16 @@ export const storyApi = {
      * 상황 분석 및 스토리 생성
      */
     async analyzeSituation(request: {
+        mode: "director" | "actor";
         situation: string;
-        opponent_name: string;
-        character_persona?: string
+        // 주연 모드용
+        opponent_name?: string;
+        character_persona?: string;
+        // 감독 모드용
+        character1_name?: string;
+        character1_persona?: string;
+        character2_name?: string;
+        character2_persona?: string;
     }): Promise<ApiResponse<{ plot: string }>> {
         const response = await fetch(`${API_V1}/story/analyze`, {
             method: 'POST',

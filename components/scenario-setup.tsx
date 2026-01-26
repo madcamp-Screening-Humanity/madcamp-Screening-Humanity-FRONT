@@ -5,30 +5,40 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Card } from "@/components/ui/card"
 import { useAppStore } from "@/lib/store"
 import {
   ArrowLeft,
   ArrowRight,
   Info,
+  User,
+  Users,
 } from "lucide-react"
 
 export function ScenarioSetup() {
-  const { step, setStep, setScenario, selectedCharacter, setGeneratedScript } = useAppStore()
+  const { step, setStep, setScenario, selectedCharacter, secondCharacter, gameMode, setGeneratedScript } = useAppStore()
   const [opponent, setOpponent] = useState(selectedCharacter?.name || "")
   const [situation, setSituation] = useState("")
 
   const isVisible = step === "scenario-setup"
+  const isDirectorMode = gameMode === "director"
 
   // 캐릭터 선택 정보를 상태에 동기화
   useEffect(() => {
-    if (isVisible && selectedCharacter) {
+    if (isVisible && selectedCharacter && !isDirectorMode) {
+      // 주연 모드일 때만 opponent 설정
       setOpponent(selectedCharacter.name)
     }
-  }, [isVisible, selectedCharacter])
+  }, [isVisible, selectedCharacter, isDirectorMode])
 
   const handleContinue = () => {
+    // 감독 모드일 때는 두 캐릭터 이름을 조합해서 opponent에 저장
+    const finalOpponent = isDirectorMode && selectedCharacter && secondCharacter
+      ? `${selectedCharacter.name} & ${secondCharacter.name}`
+      : opponent
+    
     setScenario({
-      opponent,
+      opponent: finalOpponent,
       situation,
     })
     setGeneratedScript("") // 새로운 분석을 위해 이전 스크립트 초기화
@@ -39,7 +49,11 @@ export function ScenarioSetup() {
     setStep("character-select")
   }
 
-  const isValid = opponent.trim() && situation.trim()
+  // 감독 모드: 두 캐릭터가 모두 선택되어야 하고, 상황도 입력되어야 함
+  // 주연 모드: opponent와 situation이 모두 입력되어야 함
+  const isValid = isDirectorMode
+    ? selectedCharacter && secondCharacter && situation.trim()
+    : opponent.trim() && situation.trim()
 
   if (!isVisible) return null
 
@@ -61,18 +75,74 @@ export function ScenarioSetup() {
 
       <div className="flex-1 overflow-auto px-4 py-8">
         <div className="max-w-lg mx-auto space-y-8">
-          <div className="space-y-3">
-            <Label htmlFor="opponent" className="text-foreground text-base">
-              상대역 설정
-            </Label>
-            <Input
-              id="opponent"
-              placeholder="예: 코딩 안 하고 자는 팀원"
-              value={opponent}
-              onChange={(e) => setOpponent(e.target.value)}
-              className="bg-secondary/50 border-border text-foreground placeholder:text-muted-foreground"
-            />
-          </div>
+          {/* 감독 모드: 선택된 배우들 섹션 */}
+          {isDirectorMode ? (
+            <div className="space-y-3">
+              <Label className="text-foreground text-base flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                선택된 배우들
+              </Label>
+              <div className="grid grid-cols-2 gap-4">
+                {selectedCharacter && (
+                  <Card className="p-4 bg-secondary/50 border-border">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-full bg-primary/10">
+                        <User className="h-5 w-5 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">
+                          {selectedCharacter.name}
+                        </p>
+                        {selectedCharacter.description && (
+                          <p className="text-xs text-muted-foreground truncate mt-1">
+                            {selectedCharacter.description}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+                )}
+                {secondCharacter && (
+                  <Card className="p-4 bg-secondary/50 border-border">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-full bg-primary/10">
+                        <User className="h-5 w-5 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">
+                          {secondCharacter.name}
+                        </p>
+                        {secondCharacter.description && (
+                          <p className="text-xs text-muted-foreground truncate mt-1">
+                            {secondCharacter.description}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+                )}
+              </div>
+              {(!selectedCharacter || !secondCharacter) && (
+                <p className="text-sm text-muted-foreground">
+                  두 명의 캐릭터를 모두 선택해주세요.
+                </p>
+              )}
+            </div>
+          ) : (
+            /* 주연 모드: 상대역 설정 */
+            <div className="space-y-3">
+              <Label htmlFor="opponent" className="text-foreground text-base">
+                상대역 설정
+              </Label>
+              <Input
+                id="opponent"
+                placeholder="예: 코딩 안 하고 자는 팀원"
+                value={opponent}
+                onChange={(e) => setOpponent(e.target.value)}
+                className="bg-secondary/50 border-border text-foreground placeholder:text-muted-foreground"
+              />
+            </div>
+          )}
 
           <div className="space-y-3">
             <Label htmlFor="situation" className="text-foreground text-base">

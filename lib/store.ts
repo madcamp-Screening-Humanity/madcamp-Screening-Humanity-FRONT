@@ -211,6 +211,8 @@ export const useAppStore = create<AppState>()(
           turnCount: 0,
           currentChatId: null,
           generatedScript: "",
+          selectedCharacter: null,
+          secondCharacter: null,
         }),
       goToHome: () =>
         set({
@@ -224,9 +226,12 @@ export const useAppStore = create<AppState>()(
           currentChatId: null,
           generatedScript: "",
           selectedCharacter: null,
+          secondCharacter: null,
         }),
       selectedCharacter: null,
       setSelectedCharacter: (character) => set({ selectedCharacter: character }),
+      secondCharacter: null,
+      setSecondCharacter: (character) => set({ secondCharacter: character }),
       // TTS 설정
       ttsMode: "realtime",
       setTtsMode: (mode) => set({ ttsMode: mode }),
