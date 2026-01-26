@@ -24,7 +24,7 @@ export function LandingPage() {
   const [showHistory, setShowHistory] = useState(false)
   const [isMounted, setIsMounted] = useState(false)
   const router = useRouter()
-  
+
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
   // Hydration error 방지: 클라이언트에서만 마운트 확인
@@ -50,7 +50,7 @@ export function LandingPage() {
         setIsLoggedIn(false)
         setUserName("")
         goToHome()
-        
+
         // 랜딩 페이지로 리다이렉트 (이미 랜딩 페이지이지만 상태 초기화를 위해)
         router.push("/")
       }
@@ -105,7 +105,7 @@ export function LandingPage() {
               <User className="h-5 w-5 text-foreground" suppressHydrationWarning />
             </button>
           )}
-          
+
           {/* User Info and Logout */}
           <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-card border border-border" suppressHydrationWarning>
             {userName && (
@@ -151,10 +151,6 @@ export function LandingPage() {
                       <p className="font-medium text-foreground truncate" suppressHydrationWarning>
                         {history.scenario.opponent}
                       </p>
-                      <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground" suppressHydrationWarning>
-                        <MapPin className="h-3 w-3" suppressHydrationWarning />
-                        <span suppressHydrationWarning>{backgroundNames[history.scenario.background] || history.scenario.background}</span>
-                      </div>
                       <p className="text-xs text-muted-foreground mt-1 truncate" suppressHydrationWarning>
                         {history.scenario.situation}
                       </p>

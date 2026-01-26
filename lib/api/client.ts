@@ -64,7 +64,7 @@ export const chatApi = {
         try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 180000); // 180초 타임아웃 (3분)
-            
+
             // 인증 없이 사용 (/api/chat)
             // persona, scenario 등 모든 필드 전달
             const response = await fetch(`${API_V1}/chat`, {
@@ -82,7 +82,7 @@ export const chatApi = {
                 }),
                 signal: controller.signal,
             });
-            
+
             clearTimeout(timeoutId);
             return handleResponse<ChatResponse>(response);
         } catch (error) {
@@ -322,16 +322,20 @@ export const animationApi = {
 // ============ Story API ============
 export const storyApi = {
     /**
-     * 스토리 생성
+     * 상황 분석 및 스토리 생성
      */
-    async generateStory(request: StoryRequest): Promise<ApiResponse<StoryResponse>> {
-        const response = await fetch(`${API_V1}/story/generate`, {
+    async analyzeSituation(request: {
+        situation: string;
+        opponent_name: string;
+        character_persona?: string
+    }): Promise<ApiResponse<{ plot: string }>> {
+        const response = await fetch(`${API_V1}/story/analyze`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',  // 쿠키 자동 전달
+            credentials: 'include',
             body: JSON.stringify(request),
         });
-        return handleResponse<StoryResponse>(response);
+        return handleResponse<{ plot: string }>(response);
     },
 };
 
@@ -363,7 +367,7 @@ export const systemApi = {
 async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout: number = 10000): Promise<Response> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
-    
+
     try {
         const response = await fetch(url, {
             ...options,
@@ -398,7 +402,7 @@ export const characterApi = {
                 method: 'GET',
                 cache: 'no-cache',
             });
-            
+
             if (localResponse.ok) {
                 const data = await localResponse.json();
                 return {
@@ -408,7 +412,7 @@ export const characterApi = {
                     }
                 };
             }
-            
+
             // Frontend 파일이 없으면 백엔드 API로 fallback
             const response = await fetchWithTimeout(`${API_V1}/characters/presets`, {
                 credentials: 'include',
@@ -445,6 +449,23 @@ export const characterApi = {
                 }
             };
         }
+    },
+
+    /**
+     * AI를 사용하여 캐릭터 상세 정보 자동 생성
+     */
+    async generateCharacterDetails(request: {
+        name: string;
+        description?: string;
+        category?: string;
+    }): Promise<ApiResponse<Partial<Character>>> {
+        const response = await fetch(`${API_V1}/characters/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(request),
+        });
+        return handleResponse<Partial<Character>>(response);
     },
 
     /**

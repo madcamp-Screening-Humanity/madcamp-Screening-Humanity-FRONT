@@ -2,13 +2,15 @@
 
 import { Character } from "@/lib/store"
 import { useState } from "react"
-import { ChevronDown, ChevronUp } from "lucide-react"
+import { ChevronDown, ChevronUp, Edit2, Trash2 } from "lucide-react"
 import { IMAGE_FALLBACK } from "@/lib/config/character"
 
 interface CharacterCardProps {
   character: Character
   isSelected?: boolean
   onClick?: () => void
+  onEdit?: (character: Character) => void
+  onDelete?: (characterId: string) => void
   showSampleDialogue?: boolean
 }
 
@@ -16,6 +18,8 @@ export function CharacterCard({
   character,
   isSelected = false,
   onClick,
+  onEdit,
+  onDelete,
   showSampleDialogue = true,
 }: CharacterCardProps) {
   const [isExpanded, setIsExpanded] = useState(false)
@@ -37,14 +41,44 @@ export function CharacterCard({
         }
       }}
       className={`
-        relative flex flex-col rounded-xl border-2 transition-all cursor-pointer
+        relative flex flex-col rounded-xl border-2 transition-all cursor-pointer group
         focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2
         ${isSelected
-          ? "border-primary bg-primary/10 scale-105 shadow-lg"
+          ? "border-primary bg-primary/10 scale-102 shadow-lg"
           : "border-border bg-secondary/30 hover:border-muted-foreground hover:bg-secondary/50"
         }
       `}
     >
+      {/* 액션 버튼 (수정/삭제) */}
+      {!character.is_preset && (onEdit || onDelete) && (
+        <div className="absolute top-2 right-2 flex gap-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+          {onEdit && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onEdit(character)
+              }}
+              className="p-1.5 rounded-full bg-background/80 hover:bg-background text-foreground shadow-sm"
+              title="수정"
+            >
+              <Edit2 className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onDelete(character.id)
+              }}
+              className="p-1.5 rounded-full bg-background/80 hover:bg-destructive hover:text-destructive-foreground text-destructive shadow-sm"
+              title="삭제"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      )}
+
       {/* 이미지 */}
       <div className="relative w-full aspect-square overflow-hidden rounded-t-xl">
         <img
@@ -56,7 +90,7 @@ export function CharacterCard({
             // 이미지 로드 실패 시 fallback 체인 적용
             const target = e.target as HTMLImageElement
             const currentSrc = target.src
-            
+
             // 1단계: 카테고리별 placeholder 시도
             if (character.category && IMAGE_FALLBACK.CATEGORY_PLACEHOLDERS[character.category as keyof typeof IMAGE_FALLBACK.CATEGORY_PLACEHOLDERS]) {
               const categoryPlaceholder = IMAGE_FALLBACK.CATEGORY_PLACEHOLDERS[character.category as keyof typeof IMAGE_FALLBACK.CATEGORY_PLACEHOLDERS]
@@ -65,7 +99,7 @@ export function CharacterCard({
                 return
               }
             }
-            
+
             // 2단계: 기본 placeholder
             if (currentSrc !== IMAGE_FALLBACK.CHARACTER_PLACEHOLDER) {
               target.src = IMAGE_FALLBACK.CHARACTER_PLACEHOLDER

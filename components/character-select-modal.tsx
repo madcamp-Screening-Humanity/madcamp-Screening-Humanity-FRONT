@@ -18,7 +18,7 @@ import { Sparkles, UserPlus, Loader2, Check, X } from "lucide-react"
 import type { Character } from "@/lib/api/types"
 
 // CharacterCreationWizard는 lazy load
-const CharacterCreationWizard = lazy(() => 
+const CharacterCreationWizard = lazy(() =>
   import("@/components/character-creation-wizard").then(module => ({ default: module.CharacterCreationWizard }))
 )
 
@@ -35,6 +35,7 @@ export function CharacterSelectModal() {
   const [confirmingCharacter, setConfirmingCharacter] = useState<Character | null>(null)
   const [loading, setLoading] = useState(false)
   const [showWizard, setShowWizard] = useState(false)
+  const [editingCharacter, setEditingCharacter] = useState<Character | null>(null)
 
   const loadPresetCharacters = useCallback(async () => {
     setLoading(true)
@@ -42,7 +43,7 @@ export function CharacterSelectModal() {
       console.log("사전설정 캐릭터 로드 시작...")
       const response = await characterApi.listPresets()
       console.log("사전설정 캐릭터 응답:", response)
-      
+
       if (response.success && response.data) {
         const characters = response.data.characters || []
         console.log("로드된 사전설정 캐릭터 수:", characters.length)
@@ -68,7 +69,7 @@ export function CharacterSelectModal() {
       console.log("저장된 캐릭터 로드 시작...")
       const response = await characterApi.listUserCharacters()
       console.log("저장된 캐릭터 응답:", response)
-      
+
       if (response.success && response.data) {
         const characters = response.data.characters || []
         console.log("로드된 저장된 캐릭터 수:", characters.length)
@@ -82,7 +83,7 @@ export function CharacterSelectModal() {
           fullResponse: response
         })
         setSavedCharacters([]) // 빈 배열로 설정하여 로딩 해제
-        
+
         // 네트워크 에러가 아닌 경우에만 Toast 표시 (네트워크 에러는 이미 표시됨)
         if (response.error?.code !== 'NETWORK_ERROR') {
           toast({
@@ -126,36 +127,19 @@ export function CharacterSelectModal() {
   }, [isOpen, activeTab]) // activeTab 변경 시에만 로드
 
   const handleCharacterSelect = useCallback((character: Character) => {
-    setConfirmingCharacter(character)
-    setShowConfirm(true)
-  }, [])
+    setSelectedCharacter(character)
 
-  const handleConfirm = useCallback(() => {
-    if (confirmingCharacter) {
-      setSelectedCharacter(confirmingCharacter)
-      setShowConfirm(false)
-      
-      // 다음 단계로 이동
-      if (gameMode === "actor") {
-        setStep("avatar-upload")
-      } else {
-        setStep("scenario-setup")
-      }
-    }
-  }, [confirmingCharacter, setSelectedCharacter, setStep, gameMode])
-
-  const handleCancel = useCallback(() => {
-    setShowConfirm(false)
-    setConfirmingCharacter(null)
-  }, [])
+    // 즉시 다음 단계로 이동 (Requirement 1)
+    setStep("scenario-setup")
+  }, [setSelectedCharacter, setStep])
 
   const handleWizardComplete = useCallback((character: Character) => {
     setSelectedCharacter(character)
     setShowWizard(false)
-    
+
     // 저장된 캐릭터 목록 새로고침
     loadSavedCharacters()
-    
+
     // 다음 단계로 이동
     if (gameMode === "actor") {
       setStep("avatar-upload")
@@ -166,7 +150,37 @@ export function CharacterSelectModal() {
 
   const handleWizardCancel = useCallback(() => {
     setShowWizard(false)
+    setEditingCharacter(null)
   }, [])
+
+  const handleEditCharacter = useCallback((character: Character) => {
+    setEditingCharacter(character)
+    setShowWizard(true)
+  }, [])
+
+  const handleDeleteCharacter = useCallback(async (characterId: string) => {
+    if (!confirm("정말 이 캐릭터를 삭제하시겠습니까?")) return
+
+    try {
+      const response = await characterApi.deleteCharacter(characterId)
+      if (response.success) {
+        toast({
+          title: "삭제 완료",
+          description: "캐릭터가 삭제되었습니다.",
+        })
+        loadSavedCharacters()
+      } else {
+        throw new Error(response.error?.message || "삭제 실패")
+      }
+    } catch (error) {
+      console.error("캐릭터 삭제 실패:", error)
+      toast({
+        title: "삭제 실패",
+        description: error instanceof Error ? error.message : "캐릭터를 삭제하는 중 오류가 발생했습니다.",
+        variant: "destructive",
+      })
+    }
+  }, [loadSavedCharacters, toast])
 
   const handleClose = useCallback(() => {
     setStep("mode-select")
@@ -193,6 +207,7 @@ export function CharacterSelectModal() {
             <CharacterCreationWizard
               onComplete={handleWizardComplete}
               onCancel={handleWizardCancel}
+              initialData={editingCharacter}
             />
           </Suspense>
         </DialogContent>
@@ -305,6 +320,8 @@ export function CharacterSelectModal() {
                         character={character}
                         isSelected={selectedCharacterId === character.id}
                         onClick={() => handleCharacterSelect(character)}
+                        onEdit={handleEditCharacter}
+                        onDelete={handleDeleteCharacter}
                         showSampleDialogue={true}
                       />
                     ))}

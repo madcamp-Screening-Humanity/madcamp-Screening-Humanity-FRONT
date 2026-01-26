@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAppStore } from "@/lib/store"
 import { Textarea } from "@/components/ui/textarea"
+import { storyApi } from "@/lib/api/client"
 import {
   ArrowLeft,
   ArrowRight,
@@ -17,15 +18,16 @@ import {
 } from "lucide-react"
 
 export function ScriptPreview() {
-  const { 
-    step, 
-    setStep, 
-    scenario, 
+  const {
+    step,
+    setStep,
+    scenario,
     userName,
     displayName,
     setDisplayName,
     setGeneratedScript,
     generatedScript,
+    selectedCharacter,
   } = useAppStore()
   const [isGenerating, setIsGenerating] = useState(false)
   const [script, setScript] = useState("")
@@ -35,14 +37,6 @@ export function ScriptPreview() {
   const [editedScript, setEditedScript] = useState("")
 
   const isVisible = step === "script-preview"
-
-  const backgroundNames: Record<string, string> = {
-    school: "학교",
-    office: "회사",
-    molcamp: "몰입캠프",
-    hospital: "병원",
-    cafe: "카페",
-  }
 
   useEffect(() => {
     if (isVisible && !generatedScript) {
@@ -54,21 +48,25 @@ export function ScriptPreview() {
 
   const generateScript = async () => {
     setIsGenerating(true)
-    
-    // Simulate AI generating script
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    
-    const bgName = backgroundNames[scenario.background] || scenario.background
-    const finalName = customName || displayName || userName || "주인공"
-    
-    const generatedText = `[ 상황 설명 ]
 
-장소: ${bgName}
+    try {
+      const finalName = customName || displayName || userName || "주인공"
+
+      const response = await storyApi.analyzeSituation({
+        situation: scenario.situation,
+        opponent_name: scenario.opponent,
+        character_persona: selectedCharacter?.persona
+      })
+
+      if (response.success && response.data) {
+        const plot = response.data.plot
+        const generatedText = `[ 상황 설명 ]
+
 등장인물: ${finalName} (나), ${scenario.opponent}
 
 ---
 
-${scenario.situation}
+${plot}
 
 ---
 
@@ -82,9 +80,15 @@ ${finalName}(으)로서 자연스럽게 대화를 이어가세요.
 
 행운을 빕니다!`
 
-    setScript(generatedText)
-    setGeneratedScript(generatedText)
-    setIsGenerating(false)
+        setScript(generatedText)
+        setGeneratedScript(generatedText)
+      }
+    } catch (error) {
+      console.error("Script generation error:", error)
+      setScript("스크립트 생성 중 오류가 발생했습니다.")
+    } finally {
+      setIsGenerating(false)
+    }
   }
 
   const handleContinue = () => {
@@ -143,7 +147,7 @@ ${finalName}(으)로서 자연스럽게 대화를 이어가세요.
                 </button>
               )}
             </div>
-            
+
             {showNameInput ? (
               <div className="space-y-3">
                 <Input
@@ -203,7 +207,7 @@ ${finalName}(으)로서 자연스럽게 대화를 이어가세요.
                 </button>
               )}
             </div>
-            
+
             {isGenerating ? (
               <div className="flex flex-col items-center justify-center py-12 gap-4">
                 <Loader2 className="h-8 w-8 text-primary animate-spin" />

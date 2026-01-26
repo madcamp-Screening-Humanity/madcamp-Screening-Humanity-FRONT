@@ -27,7 +27,6 @@ export interface ChatRequest {
     scenario?: {
         opponent?: string;
         situation?: string;
-        background?: string;
     };
     // TTS 관련 필드
     tts_enabled?: boolean;

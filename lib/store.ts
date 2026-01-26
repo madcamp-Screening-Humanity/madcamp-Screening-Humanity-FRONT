@@ -16,7 +16,7 @@ export type GameMode = "actor" | "director"
 
 export interface Message {
   id: string
-  role: "user" | "ai" | "system"
+  role: "user" | "assistant" | "system"
   content: string
   emotion?: string
   timestamp: Date
@@ -26,7 +26,6 @@ export interface Message {
 export interface ChatHistory {
   id: string
   scenario: {
-    background: string
     opponent: string
     situation: string
   }
@@ -69,11 +68,10 @@ interface AppState {
   uploadedImage: string | null
   setUploadedImage: (image: string | null) => void
   scenario: {
-    background: string
     opponent: string
     situation: string
   }
-  setScenario: (scenario: { background: string; opponent: string; situation: string }) => void
+  setScenario: (scenario: { opponent: string; situation: string }) => void
   generatedScript: string
   setGeneratedScript: (script: string) => void
   messages: Message[]
@@ -128,7 +126,6 @@ export const useAppStore = create<AppState>()(
       uploadedImage: null,
       setUploadedImage: (image) => set({ uploadedImage: image }),
       scenario: {
-        background: "",
         opponent: "",
         situation: "",
       },
@@ -207,7 +204,7 @@ export const useAppStore = create<AppState>()(
           gameMode: null,
           avatarUrl: null,
           uploadedImage: null,
-          scenario: { background: "", opponent: "", situation: "" },
+          scenario: { opponent: "", situation: "" },
           messages: [],
           turnCount: 0,
           currentChatId: null,
@@ -219,32 +216,32 @@ export const useAppStore = create<AppState>()(
           gameMode: null,
           avatarUrl: null,
           uploadedImage: null,
-          scenario: { background: "", opponent: "", situation: "" },
+          scenario: { opponent: "", situation: "" },
           messages: [],
           turnCount: 0,
           currentChatId: null,
           generatedScript: "",
           selectedCharacter: null,
         }),
-  selectedCharacter: null,
-  setSelectedCharacter: (character) => set({ selectedCharacter: character }),
-  // TTS 설정
-  ttsMode: "realtime",
-  setTtsMode: (mode) => set({ ttsMode: mode }),
-  ttsDelayMs: 0,
-  setTtsDelayMs: (ms) => set({ ttsDelayMs: ms }),
-  ttsStreamingMode: 0,
-  setTtsStreamingMode: (mode) => set({ ttsStreamingMode: mode }),
-  ttsEnabled: true,
-  setTtsEnabled: (enabled) => set({ ttsEnabled: enabled }),
-  sessionId: null,
-  setSessionId: (id) => set({ sessionId: id }),
-  // 턴 제한 설정
-  maxTurns: typeof window !== "undefined" 
-    ? parseInt(process.env.NEXT_PUBLIC_MAX_TURNS || "30", 10)
-    : 30,
-  setMaxTurns: (turns) => set({ maxTurns: turns }),
-}),
+      selectedCharacter: null,
+      setSelectedCharacter: (character) => set({ selectedCharacter: character }),
+      // TTS 설정
+      ttsMode: "realtime",
+      setTtsMode: (mode) => set({ ttsMode: mode }),
+      ttsDelayMs: 0,
+      setTtsDelayMs: (ms) => set({ ttsDelayMs: ms }),
+      ttsStreamingMode: 0,
+      setTtsStreamingMode: (mode) => set({ ttsStreamingMode: mode }),
+      ttsEnabled: true,
+      setTtsEnabled: (enabled) => set({ ttsEnabled: enabled }),
+      sessionId: null,
+      setSessionId: (id) => set({ sessionId: id }),
+      // 턴 제한 설정
+      maxTurns: typeof window !== "undefined"
+        ? parseInt(process.env.NEXT_PUBLIC_MAX_TURNS || "30", 10)
+        : 30,
+      setMaxTurns: (turns) => set({ maxTurns: turns }),
+    }),
     {
       name: "life-theater-storage",
       partialize: (state) => ({

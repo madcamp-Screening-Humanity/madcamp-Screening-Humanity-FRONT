@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -8,34 +8,26 @@ import { Textarea } from "@/components/ui/textarea"
 import { useAppStore } from "@/lib/store"
 import {
   ArrowLeft,
-  Building2,
-  School,
-  Hospital,
-  Coffee,
-  Tent,
   ArrowRight,
   Info,
 } from "lucide-react"
 
-const backgrounds = [
-  { id: "school", name: "학교", icon: School },
-  { id: "office", name: "회사", icon: Building2 },
-  { id: "molcamp", name: "몰입캠프", icon: Tent },
-  { id: "hospital", name: "병원", icon: Hospital },
-  { id: "cafe", name: "카페", icon: Coffee },
-]
-
 export function ScenarioSetup() {
-  const { step, setStep, setScenario, gameMode } = useAppStore()
-  const [selectedBg, setSelectedBg] = useState("")
-  const [opponent, setOpponent] = useState("")
+  const { step, setStep, setScenario, selectedCharacter } = useAppStore()
+  const [opponent, setOpponent] = useState(selectedCharacter?.name || "")
   const [situation, setSituation] = useState("")
 
   const isVisible = step === "scenario-setup"
 
+  // 캐릭터 선택 정보를 상태에 동기화
+  useEffect(() => {
+    if (isVisible && selectedCharacter) {
+      setOpponent(selectedCharacter.name)
+    }
+  }, [isVisible, selectedCharacter])
+
   const handleContinue = () => {
     setScenario({
-      background: selectedBg,
       opponent,
       situation,
     })
@@ -43,14 +35,10 @@ export function ScenarioSetup() {
   }
 
   const handleBack = () => {
-    if (gameMode === "actor") {
-      setStep("avatar-upload")
-    } else {
-      setStep("mode-select")
-    }
+    setStep("character-select")
   }
 
-  const isValid = selectedBg && opponent.trim() && situation.trim()
+  const isValid = opponent.trim() && situation.trim()
 
   if (!isVisible) return null
 
@@ -72,43 +60,6 @@ export function ScenarioSetup() {
 
       <div className="flex-1 overflow-auto px-4 py-8">
         <div className="max-w-lg mx-auto space-y-8">
-          <div className="space-y-4">
-            <Label className="text-foreground text-base">배경 선택</Label>
-            <div className="grid grid-cols-5 gap-3">
-              {backgrounds.map((bg) => {
-                const Icon = bg.icon
-                return (
-                  <button
-                    key={bg.id}
-                    onClick={() => setSelectedBg(bg.id)}
-                    className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
-                      selectedBg === bg.id
-                        ? "border-primary bg-primary/10"
-                        : "border-border bg-secondary/30 hover:border-muted-foreground"
-                    }`}
-                  >
-                    <Icon
-                      className={`h-6 w-6 ${
-                        selectedBg === bg.id
-                          ? "text-primary"
-                          : "text-muted-foreground"
-                      }`}
-                    />
-                    <span
-                      className={`text-xs ${
-                        selectedBg === bg.id
-                          ? "text-primary"
-                          : "text-muted-foreground"
-                      }`}
-                    >
-                      {bg.name}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
           <div className="space-y-3">
             <Label htmlFor="opponent" className="text-foreground text-base">
               상대역 설정
