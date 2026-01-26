@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast"
 import { useTTS } from "@/hooks/use-tts"
 import { TtsSettingsModal } from "@/components/tts-settings-modal"
 import { checkBackendHealth } from "@/lib/api/health-check"
+import { buildSystemPersona } from "@/lib/utils/persona-builder"
 import {
   Send,
   Lightbulb,
@@ -141,7 +142,7 @@ export function ChatRoom() {
         try {
           const response = await chatApi.chat({
             messages: [],
-            persona: selectedCharacter.persona,
+            persona: `${buildSystemPersona(selectedCharacter)}\n\n이제 아래 답변을 받은 ${selectedCharacter.name} 처럼 답변하십시오.`,
             character_id: selectedCharacter.id,
             scenario: {
               opponent: scenario.opponent,
@@ -245,7 +246,9 @@ export function ChatRoom() {
             })),
             { role: "user" as const, content: currentInput },
           ],
-          persona: selectedCharacter?.persona || undefined,
+          persona: selectedCharacter 
+            ? `${buildSystemPersona(selectedCharacter)}\n\n이제 아래 답변을 받은 ${selectedCharacter.name} 처럼 답변하십시오.` 
+            : undefined,
           character_id: selectedCharacter?.id,
           scenario: {
             opponent: scenario.opponent,

@@ -166,7 +166,29 @@ export interface Character {
     id: string;
     name: string;
     description?: string;
+    
+    // 상세 스펙
+    gender?: string;
+    species?: string;
+    age?: string;
+    height?: string;
+    job?: string;
+    
+    // 상세 페르소나
+    personality?: string;
+    appearance?: string;
+    likes?: string[];
+    dislikes?: string[];
+    speech_style?: string;
+    thoughts?: string;
+    features?: string;
+    habits?: string; // 말버릇
+    guidelines?: string;
+
+    // [DEPRECATED in JSON] 저장되지 않으며, 런타임에 buildSystemPersona 함수로 생성됨.
+    // 하지만 백엔드 API와의 통신을 위해 타입 정의에는 남겨둠 (optional)
     persona?: string;
+    
     voice_id?: string;
     category?: string;
     tags?: string[];
@@ -184,7 +206,27 @@ export interface PresetCharacter extends Character {
 export interface CreateCharacterRequest {
     name: string;
     description?: string;
+    
+    // 상세 스펙
+    gender?: string;
+    species?: string;
+    age?: string;
+    height?: string;
+    job?: string;
+    
+    // 상세 페르소나
+    personality?: string;
+    appearance?: string;
+    likes?: string[];
+    dislikes?: string[];
+    speech_style?: string;
+    thoughts?: string;
+    features?: string;
+    habits?: string;
+    guidelines?: string;
+
     persona?: string;
+    
     voice_id?: string;
     category?: string;
     tags?: string[];
@@ -195,7 +237,27 @@ export interface CreateCharacterRequest {
 export interface UpdateCharacterRequest {
     name?: string;
     description?: string;
+    
+    // 상세 스펙
+    gender?: string;
+    species?: string;
+    age?: string;
+    height?: string;
+    job?: string;
+    
+    // 상세 페르소나
+    personality?: string;
+    appearance?: string;
+    likes?: string[];
+    dislikes?: string[];
+    speech_style?: string;
+    thoughts?: string;
+    features?: string;
+    habits?: string;
+    guidelines?: string;
+
     persona?: string;
+    
     voice_id?: string;
     category?: string;
     tags?: string[];

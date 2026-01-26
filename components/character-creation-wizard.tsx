@@ -1,18 +1,15 @@
 "use client"
 
-import { useState, useEffect, useMemo, useCallback } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { ArrowLeft, ArrowRight, Loader2, Sparkles, Volume2, Play, Pause } from "lucide-react"
-import { characterApi } from "@/lib/api/client"
-import { ttsApi } from "@/lib/api/client"
+import { ArrowLeft, ArrowRight, Loader2, Sparkles, AlertCircle, Play, Pause, RefreshCw } from "lucide-react"
+import { characterApi, ttsApi } from "@/lib/api/client"
 import { useToast } from "@/hooks/use-toast"
-import { parsePersona } from "@/lib/utils/persona-parser"
-import { CHARACTER_PREVIEW } from "@/lib/config/character"
-import type { Character, CreateCharacterRequest } from "@/lib/api/types"
-import type { Voice } from "@/lib/api/types"
+import { generateCharacterSpec } from "@/lib/api/gemini"
+import type { Character, CreateCharacterRequest, Voice } from "@/lib/api/types"
 
 interface CharacterCreationWizardProps {
   onComplete: (character: Character) => void
@@ -29,42 +26,45 @@ export function CharacterCreationWizard({
   const [currentStep, setCurrentStep] = useState(1)
   const totalSteps = 4
 
-  // Step 1: 기본 정보 입력
+  // === Step 1: 필수 기본 정보 ===
   const [characterName, setCharacterName] = useState(initialData?.name || "")
   const [category, setCategory] = useState(initialData?.category || "")
-  const [description, setDescription] = useState(initialData?.description || "")
+  const [sourceWork, setSourceWork] = useState("") // 작품명 (신규)
+
+  // === Step 2: 상세 정보 (AI 생성 대상) ===
+  const [description, setDescription] = useState(initialData?.description || "") // 컨셉/설명
+  const [worldview, setWorldview] = useState(initialData?.species ? "판타지" : "") // 세계관 (초기값 임의 설정 안 함)
+  
+  const [gender, setGender] = useState(initialData?.gender || "")
+  const [species, setSpecies] = useState(initialData?.species || "")
+  const [age, setAge] = useState(initialData?.age || "")
+  const [height, setHeight] = useState(initialData?.height || "")
+  const [job, setJob] = useState(initialData?.job || "")
+  
+  const [personality, setPersonality] = useState(initialData?.personality || "")
+  const [appearance, setAppearance] = useState(initialData?.appearance || "")
+  const [likes, setLikes] = useState(initialData?.likes?.join(", ") || "")
+  const [dislikes, setDislikes] = useState(initialData?.dislikes?.join(", ") || "")
+  const [speechStyle, setSpeechStyle] = useState(initialData?.speech_style || "")
+  const [thoughts, setThoughts] = useState(initialData?.thoughts || "")
+  const [features, setFeatures] = useState(initialData?.features || "")
+  const [habits, setHabits] = useState(initialData?.habits || "")
+  const [guidelines, setGuidelines] = useState(initialData?.guidelines || "")
+
   const [isGenerating, setIsGenerating] = useState(false)
-  const [generatedData, setGeneratedData] = useState<Partial<Character> | null>(initialData || null)
+  const [isSaving, setIsSaving] = useState(false) // 저장 중 상태 추가
+  const [isAiGenerated, setIsAiGenerated] = useState(false) // AI 생성 여부 체크
+  
+  const [retryCount, setRetryCount] = useState(0)
+  const MAX_RETRIES = 2 // 초기 생성 외에 2번 더 허용 (총 3회)
 
-  // Step 2: Persona 상세 입력
-  const [persona, setPersona] = useState(initialData?.persona || "")
-  const [personality, setPersonality] = useState("")
-  const [speechStyle, setSpeechStyle] = useState("")
-  const [background, setBackground] = useState("")
-  const [goals, setGoals] = useState("")
-
-  // Persona 파싱 (초기 데이터가 있을 경우)
-  useEffect(() => {
-    if (initialData?.persona) {
-      const parsed = parsePersona(initialData.persona)
-      setPersonality(parsed.personality)
-      setSpeechStyle(parsed.speechStyle)
-      setBackground(parsed.background)
-      setGoals(parsed.goals)
-    }
-    if (initialData?.voice_id) {
-      setSelectedVoiceId(initialData.voice_id)
-    }
-  }, [initialData])
-
-  // Step 3: Voice 선택
+  // === Step 3: 음성 ===
   const [voices, setVoices] = useState<Voice[]>([])
-  const [selectedVoiceId, setSelectedVoiceId] = useState<string>("")
+  const [selectedVoiceId, setSelectedVoiceId] = useState<string>(initialData?.voice_id || "")
   const [loadingVoices, setLoadingVoices] = useState(false)
 
-  // Step 4: 미리보기
-  const [previewText, setPreviewText] = useState(CHARACTER_PREVIEW.DEFAULT_TEXT)
-  const [audioUrl, setAudioUrl] = useState<string | null>(null)
+  // === Step 4: 미리보기 ===
+  const [previewText, setPreviewText] = useState("안녕하세요! 반가워요.")
   const [isPlaying, setIsPlaying] = useState(false)
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null)
 
@@ -79,173 +79,148 @@ export function CharacterCreationWizard({
     setLoadingVoices(true)
     try {
       const response = await ttsApi.listVoices()
-      if (response.success && response.data) {
-        setVoices(response.data.voices || [])
-        if (response.data.voices && response.data.voices.length > 0) {
+      if (response.success && response.data?.voices) {
+        setVoices(response.data.voices)
+        if (!selectedVoiceId && response.data.voices.length > 0) {
           setSelectedVoiceId(response.data.voices[0].id)
         }
       }
     } catch (error) {
-      console.error("음성 목록 로드 실패:", error)
+      console.error("Failed to load voices:", error)
     } finally {
       setLoadingVoices(false)
     }
-  }, [])
+  }, [selectedVoiceId])
 
-  // 다음 단계로 이동 (Step 1에서는 AI 생성 포함)
-  const handleNext = async () => {
-    if (currentStep === 1) {
-      setIsGenerating(true)
-      try {
-        const response = await characterApi.generateCharacterDetails({
-          name: characterName,
-          category,
-          description
-        })
-
-        if (response.success && response.data) {
-          const generated = response.data
-          setGeneratedData(generated)
-          setPersona(generated.persona || "")
-
-          if (generated.persona) {
-            const parsed = parsePersona(generated.persona)
-            setPersonality(parsed.personality)
-            setSpeechStyle(parsed.speechStyle)
-            setBackground(parsed.background)
-            setGoals(parsed.goals)
-          }
-
-          toast({
-            title: "생성 완료",
-            description: "인공지능이 캐릭터의 페르소나를 구성했습니다.",
-          })
-          setCurrentStep(2)
-        } else {
-          throw new Error(response.error?.message || "AI 생성 실패")
-        }
-      } catch (error) {
-        console.error("AI 생성 실패:", error)
-        toast({
-          title: "생성 실패",
-          description: error instanceof Error ? error.message : "캐릭터 생성 중 오류가 발생했습니다.",
-          variant: "destructive",
-        })
-      } finally {
-        setIsGenerating(false)
-      }
-    } else if (currentStep < totalSteps) {
-      setCurrentStep(currentStep + 1)
+  // AI 자동 생성 로직
+  const runAIGeneration = async (isRetry = false) => {
+    if (!characterName) return;
+    if (isRetry && retryCount >= MAX_RETRIES) {
+        toast({ title: "재생성 횟수 초과", description: "AI 생성은 최대 3회까지만 가능합니다.", variant: "destructive" });
+        return;
     }
-  }
-
-  // 이전 단계로 이동
-  const handleBack = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1)
-    } else {
-      onCancel()
+    
+    setIsGenerating(true)
+    if (isRetry) {
+        setRetryCount(prev => prev + 1)
     }
-  }
-
-  // Step 1 검증
-  const isStep1Valid = () => {
-    return characterName.trim().length > 0
-  }
-
-  // Step 2 검증
-  const isStep2Valid = () => {
-    return persona.trim().length > 0 || (personality.trim().length > 0 && speechStyle.trim().length > 0)
-  }
-
-  // Step 3 검증
-  const isStep3Valid = () => {
-    return selectedVoiceId.length > 0
-  }
-
-  // Persona 통합
-  const buildPersona = useCallback(() => {
-    if (persona.trim()) {
-      return persona
-    }
-    const parts: string[] = []
-    if (personality.trim()) parts.push(`성격: ${personality}`)
-    if (speechStyle.trim()) parts.push(`말투: ${speechStyle}`)
-    if (background.trim()) parts.push(`배경: ${background}`)
-    if (goals.trim()) parts.push(`목표: ${goals}`)
-    return parts.join("\n")
-  }, [persona, personality, speechStyle, background, goals])
-
-  // 음성 미리보기 생성
-  const generateVoicePreview = useCallback(async () => {
-    if (!selectedVoiceId || !previewText.trim()) return
 
     try {
-      const response = await ttsApi.generateSpeech({
-        text: previewText,
-        voice_id: selectedVoiceId,
+      const spec = await generateCharacterSpec({
+        name: characterName,
+        category: category,
+        source_work: sourceWork,
       })
 
-      if (response.success && response.data) {
-        const url = ttsApi.getAudioUrl(response.data.audio_url || "")
-        setAudioUrl(url)
+      // 필드 채우기
+      if (spec.gender) setGender(spec.gender)
+      if (spec.species) setSpecies(spec.species)
+      if (spec.age) setAge(spec.age)
+      if (spec.height) setHeight(spec.height)
+      if (spec.job) setJob(spec.job)
+      if (spec.worldview) setWorldview(spec.worldview)
+      
+      setPersonality(spec.personality)
+      setAppearance(spec.appearance)
+      setDescription(spec.description)
+      setLikes(spec.likes.join(", "))
+      setDislikes(spec.dislikes.join(", "))
+      setSpeechStyle(spec.speech_style)
+      setThoughts(spec.thoughts)
+      setFeatures(spec.features)
+      setHabits(spec.habits)
+      setGuidelines(spec.guidelines)
 
-        const audio = new Audio(url)
-        audio.onended = () => setIsPlaying(false)
-        setAudioElement(audio)
-        audio.play()
-        setIsPlaying(true)
-      }
+      setIsAiGenerated(true)
+      toast({
+        title: "생성 완료",
+        description: "AI가 상세 정보를 채웠습니다.",
+      })
     } catch (error) {
-      console.error("음성 미리보기 생성 실패:", error)
+      console.error("AI Generation Failed:", error)
       toast({
-        title: "미리보기 실패",
-        description: "음성 미리보기를 생성할 수 없습니다.",
-        variant: "destructive",
+        title: "생성 실패",
+        description: error instanceof Error ? error.message : "AI 생성 중 오류가 발생했습니다.",
+        variant: "destructive"
       })
+    } finally {
+      setIsGenerating(false)
     }
-  }, [selectedVoiceId, previewText, toast])
+  }
 
-  // 오디오 재생/일시정지
-  const toggleAudio = useCallback(() => {
-    if (!audioElement) {
-      generateVoicePreview()
+  // Step 1 -> Step 2 이동 핸들러
+  const handleStep1Next = async () => {
+    if (!characterName) {
+      toast({ title: "이름을 입력해주세요", variant: "destructive" })
       return
     }
-
-    if (isPlaying) {
-      audioElement.pause()
-      setIsPlaying(false)
-    } else {
-      audioElement.play()
-      setIsPlaying(true)
+    
+    // 이미 생성된 적이 있거나, 수정 모드(initialData 존재)가 아닐 때만 자동 생성 수행
+    // 혹은 사용자가 명시적으로 원할 때... 
+    // 요구사항: "Step 1에서 입력 후 넘겨주면 Step 2 채워줌" -> 무조건 시도하도록 하되, 실패해도 넘어감
+    
+    if (!isAiGenerated && !initialData) {
+      await runAIGeneration(false); // 초기 생성은 횟수 차감 안 함(또는 별도 관리)
     }
-  }, [audioElement, isPlaying, generateVoicePreview])
+    
+    setCurrentStep(2);
+  }
 
-  // 최종 저장
+  // 저장용 텍스트 (호환성) - 하지만 이제 persona 필드는 저장 안 함. 프리뷰용.
+  const buildFullPersona = () => {
+    return [
+      `캐릭터 이름: ${characterName}`,
+      `성별: ${gender}`,
+      `종: ${species}`,
+      `직업: ${job}`,
+      `나이: ${age}`,
+      `키: ${height}`,
+      `세계관: ${worldview}`,
+      `성격: ${personality}`,
+      `외모: ${appearance}`,
+      `설명: ${description}`,
+      `좋아하는 것: ${likes}`,
+      `싫어하는 것: ${dislikes}`,
+      `말투: ${speechStyle}`,
+      `생각: ${thoughts}`,
+      `특징: ${features}`,
+      `${characterName}의 말버릇: ${habits}`,
+      `${characterName}의 가이드라인:\n${guidelines}`
+    ].join("\n\n")
+  }
+
+  // 저장 핸들러
   const handleSave = async () => {
-    const finalPersona = buildPersona()
-    if (!finalPersona.trim()) {
-      toast({
-        title: "입력 오류",
-        description: "페르소나 정보를 입력해주세요.",
-        variant: "destructive",
-      })
-      return
-    }
-
+    setIsSaving(true)
     try {
       const request: CreateCharacterRequest = {
         name: characterName,
-        description: description || generatedData?.description || "",
-        persona: finalPersona,
+        category,
+        description,
+        gender,
+        species,
+        age,
+        height,
+        job,
+        // worldview는 API 타입에 없으므로 description이나 tags에 녹이거나 해야 함. 
+        // 여기서는 일단 별도 필드로 저장은 안 되고 description에 포함되는 게 좋지만, 
+        // 사용자 데이터 유지를 위해 description 앞부분에 붙여주거나 하자.
+        // 또는 API 요청 타입에 worldview가 없으면 생략됨. (현재 types.ts에는 없음)
+        // -> types.ts 업데이트는 안 했으므로 일단 생략하거나 description에 병합.
+        
+        personality,
+        appearance,
+        likes: likes.split(",").map(s => s.trim()).filter(Boolean),
+        dislikes: dislikes.split(",").map(s => s.trim()).filter(Boolean),
+        speech_style: speechStyle,
+        thoughts,
+        features,
+        habits,
+        guidelines,
         voice_id: selectedVoiceId,
-        category: category || generatedData?.category || "",
-        tags: generatedData?.tags || [],
-        sample_dialogue: generatedData?.sample_dialogue || "",
       }
 
-      let response;
+      let response
       if (initialData?.id) {
         response = await characterApi.updateCharacter(initialData.id, request)
       } else {
@@ -253,265 +228,230 @@ export function CharacterCreationWizard({
       }
 
       if (response.success && response.data) {
-        toast({
-          title: initialData?.id ? "수정 완료" : "저장 완료",
-          description: initialData?.id ? "캐릭터 정보가 수정되었습니다." : "캐릭터가 성공적으로 저장되었습니다.",
-        })
+        toast({ title: "저장 완료" })
         onComplete(response.data)
       } else {
-        throw new Error(response.error?.message || "캐릭터 처리 실패")
+        throw new Error(response.error?.message || "저장 실패")
       }
     } catch (error) {
-      console.error("캐릭터 저장/수정 실패:", error)
-      toast({
-        title: "실패",
-        description: error instanceof Error ? error.message : "캐릭터 저장 중 오류가 발생했습니다.",
-        variant: "destructive",
-      })
+      toast({ title: "오류 발생", description: String(error), variant: "destructive" })
+    } finally {
+      setIsSaving(false)
     }
   }
 
+  const handleNext = () => {
+    if (currentStep < totalSteps) setCurrentStep(currentStep + 1)
+  }
+  const handleBack = () => {
+    if (currentStep > 1) setCurrentStep(currentStep - 1)
+    else onCancel()
+  }
+
   return (
-    <div className="space-y-6">
-      {/* 단계 표시기 */}
-      <div className="flex items-center justify-between" role="progressbar" aria-valuenow={currentStep} aria-valuemin={1} aria-valuemax={totalSteps} aria-label={`진행 단계: ${currentStep}/${totalSteps}`}>
+    <div className="space-y-6 max-h-[80vh] overflow-y-auto pr-2">
+      {/* Progress Bar */}
+      <div className="flex items-center justify-between mb-4">
         {Array.from({ length: totalSteps }, (_, i) => i + 1).map((step) => (
           <div key={step} className="flex items-center flex-1">
-            <div
-              className={`
-                w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold
-                ${step === currentStep
-                  ? "bg-primary text-primary-foreground"
-                  : step < currentStep
-                    ? "bg-primary/50 text-primary-foreground"
-                    : "bg-muted text-muted-foreground"
-                }
-              `}
-              aria-current={step === currentStep ? "step" : undefined}
-            >
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+              step === currentStep ? "bg-primary text-primary-foreground" :
+              step < currentStep ? "bg-primary/50 text-white" : "bg-secondary text-muted-foreground"
+            }`}>
               {step}
             </div>
-            {step < totalSteps && (
-              <div
-                className={`
-                  flex-1 h-1 mx-2
-                  ${step < currentStep ? "bg-primary" : "bg-muted"}
-                `}
-              />
-            )}
+            {step < totalSteps && <div className={`flex-1 h-1 mx-2 ${step < currentStep ? "bg-primary" : "bg-muted"}`} />}
           </div>
         ))}
       </div>
 
-      {/* Step 1: 기본 정보 입력 */}
-      {currentStep === 1 && (
-        <div className="space-y-4">
-          <div>
-            <Label htmlFor="characterName" className="text-foreground">
-              캐릭터 이름 *
-            </Label>
-            <Input
-              id="characterName"
-              value={characterName}
-              onChange={(e) => setCharacterName(e.target.value)}
-              placeholder="예: 헤르미온느 그레인저"
-              className="bg-secondary/50 border-border text-foreground"
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="category" className="text-foreground">
-              카테고리 (애니메이션, 영화, 역사 등)
-            </Label>
-            <Input
-              id="category"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              placeholder="예: 영화"
-              className="bg-secondary/50 border-border text-foreground"
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="description" className="text-foreground">
-              간단한 설명 (선택)
-            </Label>
-            <Input
-              id="description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="캐릭터에 대한 추가 정보를 입력하세요"
-              className="bg-secondary/50 border-border text-foreground"
-            />
-          </div>
-
-          <div className="flex items-start gap-2 p-3 bg-primary/10 rounded-lg">
-            <Sparkles className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              '다음'을 누르면 입력하신 이름을 바탕으로 AI가 상세한 성격과 말투를 자동으로 생성합니다.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Step 2: Persona 상세 입력 */}
-      {currentStep === 2 && (
-        <div className="space-y-4">
-          <div>
-            <Label htmlFor="persona" className="text-foreground">
-              페르소나 (전체) *
-            </Label>
-            <Textarea
-              id="persona"
-              value={persona}
-              onChange={(e) => setPersona(e.target.value)}
-              placeholder="AI가 생성한 내용을 확인하고 수정하세요..."
-              rows={6}
-              className="bg-secondary/50 border-border text-foreground"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="personality" className="text-foreground">성격</Label>
-              <Textarea
-                id="personality"
-                value={personality}
-                onChange={(e) => setPersonality(e.target.value)}
-                rows={3}
-                className="bg-secondary/50 border-border text-foreground text-sm"
-              />
-            </div>
-            <div>
-              <Label htmlFor="speechStyle" className="text-foreground">말투</Label>
-              <Textarea
-                id="speechStyle"
-                value={speechStyle}
-                onChange={(e) => setSpeechStyle(e.target.value)}
-                rows={3}
-                className="bg-secondary/50 border-border text-foreground text-sm"
-              />
-            </div>
-            <div>
-              <Label htmlFor="background" className="text-foreground">배경</Label>
-              <Textarea
-                id="background"
-                value={background}
-                onChange={(e) => setBackground(e.target.value)}
-                rows={3}
-                className="bg-secondary/50 border-border text-foreground text-sm"
-              />
-            </div>
-            <div>
-              <Label htmlFor="goals" className="text-foreground">목표</Label>
-              <Textarea
-                id="goals"
-                value={goals}
-                onChange={(e) => setGoals(e.target.value)}
-                rows={3}
-                className="bg-secondary/50 border-border text-foreground text-sm"
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Step 3: Voice 선택 */}
-      {currentStep === 3 && (
-        <div className="space-y-4">
-          {loadingVoices ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-primary" />
-            </div>
-          ) : (
-            <>
-              <Label className="text-foreground">음성 선택 *</Label>
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {voices.map((voice) => (
-                  <label
-                    key={voice.id}
-                    className={`
-                      flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all
-                      ${selectedVoiceId === voice.id
-                        ? "border-primary bg-primary/10"
-                        : "border-border bg-secondary/30 hover:border-muted-foreground"
-                      }
-                    `}
-                  >
-                    <input
-                      type="radio"
-                      name="voice"
-                      value={voice.id}
-                      checked={selectedVoiceId === voice.id}
-                      onChange={(e) => setSelectedVoiceId(e.target.value)}
-                      className="w-4 h-4 text-primary"
-                    />
-                    <div className="flex-1">
-                      <p className="font-medium text-foreground">{voice.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {voice.language} {voice.gender && `• ${voice.gender}`}
-                      </p>
-                    </div>
-                  </label>
-                ))}
+      {/* Steps */}
+      <div className="min-h-[400px]">
+        {currentStep === 1 && (
+          <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+            <h3 className="text-lg font-semibold">필수 정보 입력</h3>
+            <div className="space-y-4 p-4 border border-border rounded-lg bg-card/50">
+              <div>
+                <Label>캐릭터 이름 *</Label>
+                <Input value={characterName} onChange={e => setCharacterName(e.target.value)} placeholder="예: 해리 포터" className="text-lg font-semibold" />
               </div>
-            </>
-          )}
-        </div>
-      )}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>카테고리</Label>
+                  <Input value={category} onChange={e => setCategory(e.target.value)} placeholder="예: 판타지 소설" />
+                </div>
+                <div>
+                  <Label>작품명 (출처)</Label>
+                  <Input value={sourceWork} onChange={e => setSourceWork(e.target.value)} placeholder="예: 해리 포터와 마법사의 돌" />
+                </div>
+              </div>
+            </div>
 
-      {/* Step 4: 미리보기 */}
-      {currentStep === 4 && (
-        <div className="space-y-4">
-          <div className="p-4 bg-card rounded-lg border border-border">
-            <h4 className="font-semibold text-foreground mb-3">생성된 캐릭터 정보</h4>
-            <div className="space-y-2 text-sm">
-              <p><span className="font-medium">이름:</span> {characterName}</p>
-              <p><span className="font-medium">페르소나:</span></p>
-              <p className="text-muted-foreground whitespace-pre-wrap pl-4 text-xs">
-                {buildPersona()}
-              </p>
+            <div className="flex items-start gap-3 p-4 bg-primary/10 rounded-lg text-sm text-muted-foreground border border-primary/20">
+              <Sparkles className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-medium text-foreground">AI 자동 생성</p>
+                <p>위 정보를 입력하고 '다음'을 누르면, AI가 캐릭터의 상세 설정(외모, 성격, 말버릇 등)을 자동으로 완성해줍니다.</p>
+              </div>
             </div>
           </div>
+        )}
 
-          <div className="p-4 bg-card rounded-lg border border-border">
-            <h4 className="font-semibold text-foreground mb-3">음성 미리보기</h4>
-            <div className="flex items-center gap-2">
-              <Input
-                value={previewText}
-                onChange={(e) => setPreviewText(e.target.value)}
-                className="flex-1 bg-secondary/50 border-border text-foreground"
-              />
-              <Button onClick={toggleAudio} variant="outline" size="sm" className="border-border">
-                {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+        {currentStep === 2 && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+            <div className="flex justify-between items-center sticky top-0 bg-background/95 backdrop-blur z-10 py-2 border-b border-border">
+              <h3 className="text-lg font-semibold">상세 설정</h3>
+              <Button onClick={() => runAIGeneration(true)} disabled={isGenerating || retryCount >= MAX_RETRIES} size="sm" variant="outline" className={retryCount >= MAX_RETRIES ? "opacity-50" : ""}>
+                {isGenerating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                AI 다시 생성 ({Math.max(0, MAX_RETRIES - retryCount)}회 남음)
               </Button>
             </div>
+
+            {/* 기본 정보 섹션 (Step 1에서 넘어옴) */}
+            <div className="space-y-4">
+               <h4 className="text-sm font-semibold text-muted-foreground">기본 스펙</h4>
+               <div className="grid grid-cols-2 gap-4">
+                 <div>
+                   <Label>직업</Label>
+                   <Input value={job} onChange={e => setJob(e.target.value)} />
+                 </div>
+                 <div>
+                   <Label>세계관</Label>
+                   <Input value={worldview} onChange={e => setWorldview(e.target.value)} />
+                 </div>
+                 <div>
+                   <Label>성별</Label>
+                   <Input value={gender} onChange={e => setGender(e.target.value)} />
+                 </div>
+                 <div>
+                   <Label>종족</Label>
+                   <Input value={species} onChange={e => setSpecies(e.target.value)} />
+                 </div>
+                 <div>
+                   <Label>나이</Label>
+                   <Input value={age} onChange={e => setAge(e.target.value)} />
+                 </div>
+                 <div>
+                   <Label>키</Label>
+                   <Input value={height} onChange={e => setHeight(e.target.value)} />
+                 </div>
+               </div>
+            </div>
+
+            {/* 상세 정보 섹션 */}
+            <div className="space-y-4 pt-4 border-t border-border">
+              <h4 className="text-sm font-semibold text-muted-foreground">페르소나 상세</h4>
+              <div className="grid grid-cols-1 gap-4">
+                <div>
+                  <Label>설명 (배경 스토리)</Label>
+                  <Textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} />
+                </div>
+                <div>
+                  <Label>성격</Label>
+                  <Textarea value={personality} onChange={e => setPersonality(e.target.value)} rows={3} />
+                </div>
+                <div>
+                  <Label>외모</Label>
+                  <Textarea value={appearance} onChange={e => setAppearance(e.target.value)} rows={3} />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>좋아하는 것</Label>
+                    <Textarea value={likes} onChange={e => setLikes(e.target.value)} rows={2} placeholder="콤마(,)로 구분" />
+                  </div>
+                  <div>
+                    <Label>싫어하는 것</Label>
+                    <Textarea value={dislikes} onChange={e => setDislikes(e.target.value)} rows={2} placeholder="콤마(,)로 구분" />
+                  </div>
+                </div>
+                <div>
+                  <Label>말투</Label>
+                  <Textarea value={speechStyle} onChange={e => setSpeechStyle(e.target.value)} rows={2} />
+                </div>
+                <div>
+                  <Label>생각 (속마음)</Label>
+                  <Textarea value={thoughts} onChange={e => setThoughts(e.target.value)} rows={2} />
+                </div>
+                <div>
+                  <Label>특징</Label>
+                  <Textarea value={features} onChange={e => setFeatures(e.target.value)} rows={2} />
+                </div>
+                <div>
+                  <Label>말버릇</Label>
+                  <Input value={habits} onChange={e => setHabits(e.target.value)} />
+                </div>
+                <div>
+                  <Label>가이드라인</Label>
+                  <Textarea value={guidelines} onChange={e => setGuidelines(e.target.value)} rows={3} />
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* 네비게이션 버튼 */}
-      <div className="flex items-center justify-between pt-4 border-t border-border">
-        <Button variant="ghost" onClick={handleBack} className="text-muted-foreground" disabled={isGenerating}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          {currentStep === 1 ? "취소" : "이전"}
+        {currentStep === 3 && (
+          <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+            <h3 className="text-lg font-semibold">음성 선택</h3>
+            {loadingVoices ? (
+              <div className="flex justify-center py-8"><Loader2 className="animate-spin" /></div>
+            ) : (
+              <div className="grid grid-cols-1 gap-2 max-h-[400px] overflow-y-auto">
+                {voices.map(voice => (
+                  <div key={voice.id} 
+                    onClick={() => setSelectedVoiceId(voice.id)}
+                    className={`p-3 rounded-lg border-2 cursor-pointer transition-all flex justify-between items-center ${selectedVoiceId === voice.id ? "border-primary bg-primary/5" : "border-transparent bg-secondary hover:bg-secondary/80"}`}
+                  >
+                    <div>
+                      <p className="font-medium">{voice.name}</p>
+                      <p className="text-xs text-muted-foreground">{voice.language}</p>
+                    </div>
+                    {selectedVoiceId === voice.id && <div className="w-3 h-3 rounded-full bg-primary" />}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {currentStep === 4 && (
+          <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+            <h3 className="text-lg font-semibold">최종 확인</h3>
+            <div className="bg-secondary/30 p-4 rounded-lg space-y-2 text-sm">
+              <p><strong>이름:</strong> {characterName}</p>
+              <p><strong>작품:</strong> {sourceWork} ({category})</p>
+              <p><strong>직업:</strong> {job}</p>
+              <div className="mt-4 pt-4 border-t border-border">
+                <p className="font-semibold mb-2">프리뷰 페르소나:</p>
+                <div className="bg-black/20 p-2 rounded max-h-48 overflow-y-auto">
+                   <pre className="whitespace-pre-wrap text-xs">{buildFullPersona()}</pre>
+                </div>
+              </div>
+            </div>
+            {isGenerating && (
+                <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
+                    <div className="bg-card p-4 rounded-lg shadow-lg flex items-center gap-3">
+                        <Loader2 className="animate-spin text-primary" />
+                        <span>AI가 캐릭터 정보를 생성 중입니다...</span>
+                    </div>
+                </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Navigation */}
+      <div className="flex justify-between pt-4 border-t border-border">
+        <Button variant="ghost" onClick={handleBack} disabled={isGenerating}>
+          <ArrowLeft className="w-4 h-4 mr-2" /> {currentStep === 1 ? "취소" : "이전"}
         </Button>
-
-        <Button
-          onClick={currentStep === totalSteps ? handleSave : handleNext}
-          disabled={isGenerating || (currentStep === 1 && !isStep1Valid()) || (currentStep === 3 && !isStep3Valid())}
-          className="bg-primary text-primary-foreground min-w-[100px]"
-        >
-          {isGenerating ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : currentStep === totalSteps ? (
-            "저장하고 사용하기"
-          ) : (
-            <>
-              다음
-              <ArrowRight className="h-4 w-4 ml-2" />
-            </>
-          )}
+        <Button onClick={currentStep === 1 ? handleStep1Next : (currentStep === totalSteps ? handleSave : handleNext)} 
+           disabled={isGenerating || isSaving || (currentStep === 1 && !characterName)}>
+           {isGenerating || isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : (
+             <>
+               {currentStep === totalSteps ? "완료" : "다음"} 
+               <ArrowRight className="w-4 h-4 ml-2" />
+             </>
+           )}
         </Button>
       </div>
     </div>
