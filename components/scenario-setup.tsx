@@ -13,7 +13,7 @@ import {
 } from "lucide-react"
 
 export function ScenarioSetup() {
-  const { step, setStep, setScenario, selectedCharacter } = useAppStore()
+  const { step, setStep, setScenario, selectedCharacter, setGeneratedScript } = useAppStore()
   const [opponent, setOpponent] = useState(selectedCharacter?.name || "")
   const [situation, setSituation] = useState("")
 
@@ -31,6 +31,7 @@ export function ScenarioSetup() {
       opponent,
       situation,
     })
+    setGeneratedScript("") // 새로운 분석을 위해 이전 스크립트 초기화
     setStep("script-preview")
   }
 

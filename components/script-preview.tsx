@@ -47,22 +47,27 @@ export function ScriptPreview() {
   }, [isVisible])
 
   const generateScript = async () => {
+    // 기본 데이터 검증
+    const opponentName = scenario.opponent || selectedCharacter?.name || "상대역"
+    const currentSituation = scenario.situation || "상황이 입력되지 않았습니다."
+    const finalName = customName || displayName || userName || "주인공"
+
     setIsGenerating(true)
 
     try {
-      const finalName = customName || displayName || userName || "주인공"
-
       const response = await storyApi.analyzeSituation({
-        situation: scenario.situation,
-        opponent_name: scenario.opponent,
-        character_persona: selectedCharacter?.persona
+        situation: currentSituation,
+        opponent_name: opponentName,
+        character_persona: selectedCharacter?.persona || ""
       })
 
       if (response.success && response.data) {
-        const plot = response.data.plot
+        // plot 필드 우선 사용, 없으면 story 필드 확인 (하위 호환)
+        const plot = (response.data as any).plot || (response.data as any).story || currentSituation
+
         const generatedText = `[ 상황 설명 ]
 
-등장인물: ${finalName} (나), ${scenario.opponent}
+등장인물: ${finalName} (나), ${opponentName}
 
 ---
 
@@ -72,7 +77,7 @@ ${plot}
 
 [ 연극 시작 ]
 
-${scenario.opponent}의 역할을 맡은 AI가 먼저 말을 걸 것입니다.
+${opponentName}의 역할을 맡은 AI가 먼저 말을 걸 것입니다.
 ${finalName}(으)로서 자연스럽게 대화를 이어가세요.
 
 목표: 주어진 상황에서 원하는 결과를 이끌어내세요.
@@ -82,10 +87,13 @@ ${finalName}(으)로서 자연스럽게 대화를 이어가세요.
 
         setScript(generatedText)
         setGeneratedScript(generatedText)
+      } else {
+        const errorMsg = response.error?.message || "상황을 분석하는 도중 알 수 없는 오류가 발생했습니다."
+        setScript(`[ 분석 실패 ]\n\nAI의 일시적인 혼선으로 분석에 실패했습니다.\n\n[ 입력하신 상황 ]\n${currentSituation}\n\n위 상황으로 바로 대화를 시작하실 수 있습니다.`)
       }
     } catch (error) {
       console.error("Script generation error:", error)
-      setScript("스크립트 생성 중 오류가 발생했습니다.")
+      setScript(`[ 서버 연결 오류 ]\n\n백엔드 서버와 통신할 수 없습니다.\n\n[ 입력하신 상황 ]\n${currentSituation}`)
     } finally {
       setIsGenerating(false)
     }
@@ -211,7 +219,10 @@ ${finalName}(으)로서 자연스럽게 대화를 이어가세요.
             {isGenerating ? (
               <div className="flex flex-col items-center justify-center py-12 gap-4">
                 <Loader2 className="h-8 w-8 text-primary animate-spin" />
-                <p className="text-muted-foreground text-sm">상황을 분석하고 있습니다...</p>
+                <div className="text-center space-y-1">
+                  <p className="text-foreground font-medium">시나리오 생성 중...</p>
+                  <p className="text-muted-foreground text-xs">잠시만 기다려주세요. AI가 상황을 분석하고 있습니다.</p>
+                </div>
               </div>
             ) : isEditingScript ? (
               <div className="space-y-3">

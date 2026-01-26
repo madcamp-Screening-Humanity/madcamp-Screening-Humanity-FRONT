@@ -22,7 +22,7 @@ import type {
 
 // API Base URL - 환경변수에서 가져오거나 기본값 사용
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-// API 경로 통일: Backend와 동일하게 `/api` 사용
+// API 경로: 많은 문서에서 /api로 통일된 상태이므로 /api 시도 (v1에서 404 발생 시)
 const API_V1 = `${API_BASE_URL}/api`;
 
 // ============ 유틸리티 함수 ============
