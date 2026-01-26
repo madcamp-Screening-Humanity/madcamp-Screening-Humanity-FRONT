@@ -37,6 +37,10 @@ export function CharacterSelectModal() {
   const [showWizard, setShowWizard] = useState(false)
   const [editingCharacter, setEditingCharacter] = useState<Character | null>(null)
 
+  // 감독 모드용: 2개 캐릭터 선택
+  const [firstCharacter, setFirstCharacter] = useState<Character | null>(null)
+  const [secondCharacter, setSecondCharacter] = useState<Character | null>(null)
+
   const loadPresetCharacters = useCallback(async () => {
     setLoading(true)
     try {
@@ -127,11 +131,40 @@ export function CharacterSelectModal() {
   }, [isOpen, activeTab]) // activeTab 변경 시에만 로드
 
   const handleCharacterSelect = useCallback((character: Character) => {
-    setSelectedCharacter(character)
-
-    // 즉시 다음 단계로 이동 (Requirement 1)
-    setStep("scenario-setup")
-  }, [setSelectedCharacter, setStep])
+    if (gameMode === "actor") {
+      // 주연 모드: 1개 캐릭터만 선택하고 바로 진행
+      setSelectedCharacter(character)
+      setStep("scenario-setup")
+    } else if (gameMode === "director") {
+      // 감독 모드: 2개 캐릭터 선택 필요
+      if (!firstCharacter) {
+        // 첫 번째 캐릭터 선택
+        setFirstCharacter(character)
+        toast({
+          title: "첫 번째 캐릭터 선택됨",
+          description: `${character.name}이(가) 선택되었습니다. 두 번째 캐릭터를 선택해주세요.`,
+        })
+      } else if (firstCharacter.id === character.id) {
+        // 같은 캐릭터를 다시 클릭하면 선택 해제
+        setFirstCharacter(null)
+        toast({
+          title: "선택 취소",
+          description: "첫 번째 캐릭터 선택이 취소되었습니다.",
+        })
+      } else {
+        // 두 번째 캐릭터 선택 완료
+        setSecondCharacter(character)
+        // 첫 번째 캐릭터를 주 캐릭터로 설정
+        setSelectedCharacter(firstCharacter)
+        toast({
+          title: "캐릭터 선택 완료",
+          description: `${firstCharacter.name}과(와) ${character.name}이(가) 선택되었습니다.`,
+        })
+        // 다음 단계로 진행
+        setStep("scenario-setup")
+      }
+    }
+  }, [gameMode, firstCharacter, setSelectedCharacter, setStep, toast])
 
   const handleWizardComplete = useCallback((character: Character) => {
     setSelectedCharacter(character)
@@ -271,6 +304,21 @@ export function CharacterSelectModal() {
 
           {/* 내용 */}
           <div className="py-4">
+            {/* 감독 모드 안내 메시지 */}
+            {gameMode === "director" && (
+              <div className="mb-4 p-3 bg-primary/10 rounded-lg border border-primary/20">
+                <p className="text-sm text-foreground">
+                  {!firstCharacter ? (
+                    <span>🎭 첫 번째 캐릭터를 선택해주세요</span>
+                  ) : !secondCharacter ? (
+                    <span>✅ <strong>{firstCharacter.name}</strong> 선택됨 → 두 번째 캐릭터를 선택해주세요</span>
+                  ) : (
+                    <span>✅ 선택 완료!</span>
+                  )}
+                </p>
+              </div>
+            )}
+
             {loading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -287,7 +335,11 @@ export function CharacterSelectModal() {
                       <CharacterCard
                         key={character.id}
                         character={character}
-                        isSelected={selectedCharacterId === character.id}
+                        isSelected={
+                          gameMode === "director"
+                            ? firstCharacter?.id === character.id || secondCharacter?.id === character.id
+                            : selectedCharacterId === character.id
+                        }
                         onClick={() => handleCharacterSelect(character)}
                         showSampleDialogue={true}
                       />
@@ -318,7 +370,11 @@ export function CharacterSelectModal() {
                       <CharacterCard
                         key={character.id}
                         character={character}
-                        isSelected={selectedCharacterId === character.id}
+                        isSelected={
+                          gameMode === "director"
+                            ? firstCharacter?.id === character.id || secondCharacter?.id === character.id
+                            : selectedCharacterId === character.id
+                        }
                         onClick={() => handleCharacterSelect(character)}
                         onEdit={handleEditCharacter}
                         onDelete={handleDeleteCharacter}
@@ -331,57 +387,59 @@ export function CharacterSelectModal() {
             ) : null}
           </div>
         </DialogContent>
-      </Dialog>
+      </Dialog >
 
       {/* 확인 모달 */}
-      {showConfirm && confirmingCharacter && (
-        <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
-          <DialogContent className="sm:max-w-md bg-card border-border">
-            <DialogHeader>
-              <DialogTitle className="text-foreground">캐릭터 선택 확인</DialogTitle>
-              <DialogDescription className="text-muted-foreground">
-                선택한 캐릭터로 진행하시겠습니까?
-              </DialogDescription>
-            </DialogHeader>
+      {
+        showConfirm && confirmingCharacter && (
+          <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
+            <DialogContent className="sm:max-w-md bg-card border-border">
+              <DialogHeader>
+                <DialogTitle className="text-foreground">캐릭터 선택 확인</DialogTitle>
+                <DialogDescription className="text-muted-foreground">
+                  선택한 캐릭터로 진행하시겠습니까?
+                </DialogDescription>
+              </DialogHeader>
 
-            <div className="py-4 space-y-3">
-              <div className="p-4 bg-secondary/50 rounded-lg border border-border">
-                <h4 className="font-semibold text-foreground mb-2">
-                  {confirmingCharacter.name}
-                </h4>
-                {confirmingCharacter.description && (
-                  <p className="text-sm text-muted-foreground">
-                    {confirmingCharacter.description}
-                  </p>
-                )}
-                {confirmingCharacter.category && (
-                  <p className="text-xs text-primary mt-2">
-                    카테고리: {confirmingCharacter.category}
-                  </p>
-                )}
+              <div className="py-4 space-y-3">
+                <div className="p-4 bg-secondary/50 rounded-lg border border-border">
+                  <h4 className="font-semibold text-foreground mb-2">
+                    {confirmingCharacter.name}
+                  </h4>
+                  {confirmingCharacter.description && (
+                    <p className="text-sm text-muted-foreground">
+                      {confirmingCharacter.description}
+                    </p>
+                  )}
+                  {confirmingCharacter.category && (
+                    <p className="text-xs text-primary mt-2">
+                      카테고리: {confirmingCharacter.category}
+                    </p>
+                  )}
+                </div>
               </div>
-            </div>
 
-            <div className="flex gap-2 justify-end">
-              <Button
-                variant="outline"
-                onClick={handleCancel}
-                className="border-border"
-              >
-                <X className="h-4 w-4 mr-2" />
-                취소
-              </Button>
-              <Button
-                onClick={handleConfirm}
-                className="bg-primary text-primary-foreground"
-              >
-                <Check className="h-4 w-4 mr-2" />
-                확인
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
+              <div className="flex gap-2 justify-end">
+                <Button
+                  variant="outline"
+                  onClick={handleCancel}
+                  className="border-border"
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  취소
+                </Button>
+                <Button
+                  onClick={handleConfirm}
+                  className="bg-primary text-primary-foreground"
+                >
+                  <Check className="h-4 w-4 mr-2" />
+                  확인
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )
+      }
     </>
   )
 }

@@ -92,6 +92,8 @@ interface AppState {
   setGenerationJobId: (id: string | null) => void
   selectedCharacter: Character | null
   setSelectedCharacter: (character: Character | null) => void
+  secondCharacter: Character | null  // 감독 모드용 두 번째 캐릭터
+  setSecondCharacter: (character: Character | null) => void
   // TTS 설정
   ttsMode: "realtime" | "delayed" | "on_click"
   setTtsMode: (mode: "realtime" | "delayed" | "on_click") => void
