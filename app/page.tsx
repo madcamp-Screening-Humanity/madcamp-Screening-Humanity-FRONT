@@ -2,6 +2,7 @@
 
 import { LandingPage } from "@/components/landing-page"
 import { ModeSelectModal } from "@/components/mode-select-modal"
+import { CharacterSelectModal } from "@/components/character-select-modal"
 import { AvatarUpload } from "@/components/avatar-upload"
 import { AvatarPreview } from "@/components/avatar-preview"
 import { ScenarioSetup } from "@/components/scenario-setup"
@@ -20,6 +21,9 @@ export default function Home() {
 
       {/* Mode Selection Modal */}
       <ModeSelectModal />
+
+      {/* Character Select Modal */}
+      <CharacterSelectModal />
 
       {/* Avatar Upload */}
       <AvatarUpload />

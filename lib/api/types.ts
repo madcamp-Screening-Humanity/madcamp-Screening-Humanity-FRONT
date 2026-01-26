@@ -22,6 +22,18 @@ export interface ChatRequest {
     temperature?: number;
     max_tokens?: number;
     model?: string;
+    session_id?: string;
+    character_id?: string;
+    scenario?: {
+        opponent?: string;
+        situation?: string;
+        background?: string;
+    };
+    // TTS 관련 필드
+    tts_enabled?: boolean;
+    tts_mode?: "realtime" | "delayed" | "on_click";
+    tts_delay_ms?: number;
+    tts_streaming_mode?: number;
 }
 
 export interface ChatResponse {
@@ -30,6 +42,9 @@ export interface ChatResponse {
         prompt_tokens: number;
         completion_tokens: number;
     };
+    session_id?: string;
+    audio_url?: string;
+    context_summarized?: boolean;
 }
 
 export interface ModelInfo {
@@ -44,6 +59,12 @@ export interface TTSRequest {
     voice_id?: string;
     speed?: number;
     language?: string;
+    // GPT-SoVITS 파라미터
+    streaming_mode?: number; // 0-3
+    return_binary?: boolean;
+    text_lang?: string;
+    prompt_lang?: string;
+    media_type?: string; // "wav" | "ogg" | "aac" | "raw"
 }
 
 export interface TTSResponse {
@@ -58,7 +79,8 @@ export interface Voice {
     id: string;
     name: string;
     language: string;
-    gender: string;
+    gender?: string;  // optional - 실제 API 응답에 없을 수 있음
+    description?: string;  // optional - 설명 필드
 }
 
 // ============ Generation API ============
@@ -138,4 +160,54 @@ export interface SystemStatus {
             url: string;
         };
     };
+}
+
+// ============ Character API ============
+export interface Character {
+    id: string;
+    name: string;
+    description?: string;
+    persona?: string;
+    voice_id?: string;
+    category?: string;
+    tags?: string[];
+    sample_dialogue?: string;
+    image_url?: string;
+    is_preset: boolean;
+    user_id?: string;
+    created_at?: string;
+}
+
+export interface PresetCharacter extends Character {
+    is_preset: true;
+}
+
+export interface CreateCharacterRequest {
+    name: string;
+    description?: string;
+    persona?: string;
+    voice_id?: string;
+    category?: string;
+    tags?: string[];
+    sample_dialogue?: string;
+    image_url?: string;
+}
+
+export interface UpdateCharacterRequest {
+    name?: string;
+    description?: string;
+    persona?: string;
+    voice_id?: string;
+    category?: string;
+    tags?: string[];
+    sample_dialogue?: string;
+    image_url?: string;
+}
+
+export interface CharacterResponse {
+    characters: Character[];
+}
+
+export interface SingleCharacterResponse {
+    character: Character;
 }

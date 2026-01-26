@@ -14,6 +14,10 @@ import type {
     StoryRequest,
     StoryResponse,
     SystemStatus,
+    Character,
+    CharacterResponse,
+    CreateCharacterRequest,
+    UpdateCharacterRequest,
 } from './types';
 
 // API Base URL - 환경변수에서 가져오거나 기본값 사용
@@ -24,27 +28,103 @@ const API_V1 = `${API_BASE_URL}/api`;
 // ============ 유틸리티 함수 ============
 async function handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
     if (!response.ok) {
-        const error = await response.json().catch(() => ({
+        const errorData = await response.json().catch(() => ({
             error: { code: 'NETWORK_ERROR', message: response.statusText }
         }));
-        return error;
+        // 에러 응답에도 success: false 포함
+        return {
+            success: false,
+            error: errorData.error || errorData.detail ? {
+                code: errorData.error?.code || 'API_ERROR',
+                message: errorData.error?.message || errorData.detail || response.statusText
+            } : {
+                code: 'NETWORK_ERROR',
+                message: response.statusText
+            }
+        };
     }
-    return response.json();
+    const data = await response.json();
+    // 성공 응답에 success가 없으면 추가
+    if (data.success === undefined) {
+        return {
+            success: true,
+            data: data.data || data
+        };
+    }
+    return data;
 }
 
 // ============ Chat API ============
 export const chatApi = {
     /**
-     * LLM 채팅 요청
+     * LLM 채팅 요청 (인증 없음)
+     * 타임아웃: 180초 (Ollama 응답이 30-60초 걸릴 수 있으므로 여유있게 설정)
      */
     async chat(request: ChatRequest): Promise<ApiResponse<ChatResponse>> {
-        const response = await fetch(`${API_V1}/chat`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',  // 쿠키 자동 전달
-            body: JSON.stringify(request),
-        });
-        return handleResponse<ChatResponse>(response);
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 180000); // 180초 타임아웃 (3분)
+            
+            // 인증 없이 사용 (/api/chat)
+            // persona, scenario 등 모든 필드 전달
+            const response = await fetch(`${API_V1}/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    messages: request.messages,
+                    model: request.model || 'gemma-3-27b-it',
+                    temperature: request.temperature || 0.7,
+                    max_tokens: request.max_tokens || 512,
+                    persona: request.persona,  // 페르소나 전달
+                    scenario: request.scenario,  // 시나리오 정보 전달
+                    session_id: request.session_id,
+                    character_id: request.character_id,
+                }),
+                signal: controller.signal,
+            });
+            
+            clearTimeout(timeoutId);
+            return handleResponse<ChatResponse>(response);
+        } catch (error) {
+            // 타임아웃 또는 네트워크 오류 처리
+            if (error instanceof Error) {
+                if (error.name === 'AbortError') {
+                    return {
+                        success: false,
+                        error: {
+                            code: 'TIMEOUT_ERROR',
+                            message: '요청 시간이 초과되었습니다. (180초)\n\nOllama API 응답이 느릴 수 있습니다. 잠시 후 다시 시도해주세요.'
+                        }
+                    };
+                }
+                // 네트워크 오류 (Failed to fetch, NetworkError 등)
+                // TypeError는 네트워크 연결 실패를 의미할 수 있음
+                if (error.name === 'TypeError') {
+                    // fetch가 실패한 경우 (서버가 실행되지 않음)
+                    if (error.message.includes('fetch') || error.message.includes('Failed to fetch')) {
+                        return {
+                            success: false,
+                            error: {
+                                code: 'NETWORK_ERROR',
+                                message: `백엔드 서버에 연결할 수 없습니다. (${API_BASE_URL})\n\n확인 사항:\n1. 백엔드 서버가 실행 중인지 확인 (http://localhost:8000)\n2. 브라우저 콘솔에서 네트워크 탭 확인\n3. 방화벽 설정 확인`
+                            }
+                        };
+                    }
+                }
+                // 기타 네트워크 관련 오류
+                if (error.message.includes('network') || error.message.includes('NetworkError')) {
+                    return {
+                        success: false,
+                        error: {
+                            code: 'NETWORK_ERROR',
+                            message: `네트워크 오류가 발생했습니다. (${API_BASE_URL})\n\n백엔드 서버가 실행 중인지 확인하세요.`
+                        }
+                    };
+                }
+            }
+            // 기타 에러는 그대로 throw
+            throw error;
+        }
     },
 
     /**
@@ -278,6 +358,146 @@ export const systemApi = {
     },
 };
 
+// ============ Character API ============
+// 타임아웃을 가진 fetch 래퍼
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout: number = 10000): Promise<Response> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    
+    try {
+        const response = await fetch(url, {
+            ...options,
+            signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        return response;
+    } catch (error) {
+        clearTimeout(timeoutId);
+        // AbortError는 타임아웃
+        if (error instanceof Error && error.name === 'AbortError') {
+            throw new Error('요청 시간이 초과되었습니다.');
+        }
+        // 네트워크 에러 (Failed to fetch 등)
+        if (error instanceof TypeError && error.message.includes('fetch')) {
+            throw new Error(`네트워크 오류: 백엔드 서버에 연결할 수 없습니다. (${url})`);
+        }
+        // 기타 에러는 그대로 throw
+        throw error;
+    }
+}
+
+export const characterApi = {
+    /**
+     * 사전설정 캐릭터 목록 조회
+     * Frontend의 public/characters.json에서 직접 로드 (백엔드 서버 불필요)
+     */
+    async listPresets(): Promise<ApiResponse<CharacterResponse>> {
+        try {
+            // 먼저 Frontend의 public 폴더에서 직접 로드 시도
+            const localResponse = await fetch('/characters.json', {
+                method: 'GET',
+                cache: 'no-cache',
+            });
+            
+            if (localResponse.ok) {
+                const data = await localResponse.json();
+                return {
+                    success: true,
+                    data: {
+                        characters: data.characters || []
+                    }
+                };
+            }
+            
+            // Frontend 파일이 없으면 백엔드 API로 fallback
+            const response = await fetchWithTimeout(`${API_V1}/characters/presets`, {
+                credentials: 'include',
+            }, 10000);
+            return handleResponse<CharacterResponse>(response);
+        } catch (error) {
+            console.error("listPresets fetch error:", error);
+            // 에러 발생 시에도 빈 배열 반환 (에러 메시지 표시하지 않음)
+            return {
+                success: true,
+                data: {
+                    characters: []
+                }
+            };
+        }
+    },
+
+    /**
+     * 사용자가 생성한 캐릭터 목록 조회
+     */
+    async listUserCharacters(): Promise<ApiResponse<CharacterResponse>> {
+        try {
+            const response = await fetchWithTimeout(`${API_V1}/characters`, {
+                credentials: 'include',
+            }, 10000);
+            return handleResponse<CharacterResponse>(response);
+        } catch (error) {
+            console.error("listUserCharacters fetch error:", error);
+            return {
+                success: false,
+                error: {
+                    code: 'NETWORK_ERROR',
+                    message: error instanceof Error ? error.message : '네트워크 오류가 발생했습니다.'
+                }
+            };
+        }
+    },
+
+    /**
+     * 캐릭터 생성
+     */
+    async createCharacter(request: CreateCharacterRequest): Promise<ApiResponse<Character>> {
+        const response = await fetch(`${API_V1}/characters`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(request),
+        });
+        return handleResponse<Character>(response);
+    },
+
+    /**
+     * 특정 캐릭터 조회
+     */
+    async getCharacter(characterId: string): Promise<ApiResponse<Character>> {
+        const response = await fetch(`${API_V1}/characters/${characterId}`, {
+            credentials: 'include',
+        });
+        return handleResponse<Character>(response);
+    },
+
+    /**
+     * 캐릭터 수정
+     */
+    async updateCharacter(
+        characterId: string,
+        request: UpdateCharacterRequest
+    ): Promise<ApiResponse<Character>> {
+        const response = await fetch(`${API_V1}/characters/${characterId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(request),
+        });
+        return handleResponse<Character>(response);
+    },
+
+    /**
+     * 캐릭터 삭제
+     */
+    async deleteCharacter(characterId: string): Promise<ApiResponse<{ message: string }>> {
+        const response = await fetch(`${API_V1}/characters/${characterId}`, {
+            method: 'DELETE',
+            credentials: 'include',
+        });
+        return handleResponse<{ message: string }>(response);
+    },
+};
+
 // ============ 통합 API 객체 ============
 export const api = {
     chat: chatApi,
@@ -287,6 +507,7 @@ export const api = {
     animation: animationApi,
     story: storyApi,
     system: systemApi,
+    character: characterApi,
 };
 
 export default api;

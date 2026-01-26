@@ -4,6 +4,7 @@ import { persist } from "zustand/middleware"
 export type AppStep =
   | "landing"
   | "mode-select"
+  | "character-select"
   | "avatar-upload"
   | "avatar-preview"
   | "scenario-setup"
@@ -19,6 +20,7 @@ export interface Message {
   content: string
   emotion?: string
   timestamp: Date
+  audio_url?: string
 }
 
 export interface ChatHistory {
@@ -34,6 +36,21 @@ export interface ChatHistory {
   updatedAt: Date
   generatedScript: string
   displayName: string
+}
+
+export interface Character {
+  id: string
+  name: string
+  description?: string
+  persona?: string
+  voice_id?: string
+  category?: string
+  tags?: string[]
+  sample_dialogue?: string
+  image_url?: string
+  is_preset: boolean
+  user_id?: string
+  created_at?: string
 }
 
 interface AppState {
@@ -75,6 +92,22 @@ interface AppState {
   goToHome: () => void
   generationJobId: string | null
   setGenerationJobId: (id: string | null) => void
+  selectedCharacter: Character | null
+  setSelectedCharacter: (character: Character | null) => void
+  // TTS 설정
+  ttsMode: "realtime" | "delayed" | "on_click"
+  setTtsMode: (mode: "realtime" | "delayed" | "on_click") => void
+  ttsDelayMs: number
+  setTtsDelayMs: (ms: number) => void
+  ttsStreamingMode: number
+  setTtsStreamingMode: (mode: number) => void
+  ttsEnabled: boolean
+  setTtsEnabled: (enabled: boolean) => void
+  sessionId: string | null
+  setSessionId: (id: string | null) => void
+  // 턴 제한 설정
+  maxTurns: number
+  setMaxTurns: (turns: number) => void
 }
 
 export const useAppStore = create<AppState>()(
@@ -191,8 +224,27 @@ export const useAppStore = create<AppState>()(
           turnCount: 0,
           currentChatId: null,
           generatedScript: "",
+          selectedCharacter: null,
         }),
-    }),
+  selectedCharacter: null,
+  setSelectedCharacter: (character) => set({ selectedCharacter: character }),
+  // TTS 설정
+  ttsMode: "realtime",
+  setTtsMode: (mode) => set({ ttsMode: mode }),
+  ttsDelayMs: 0,
+  setTtsDelayMs: (ms) => set({ ttsDelayMs: ms }),
+  ttsStreamingMode: 0,
+  setTtsStreamingMode: (mode) => set({ ttsStreamingMode: mode }),
+  ttsEnabled: true,
+  setTtsEnabled: (enabled) => set({ ttsEnabled: enabled }),
+  sessionId: null,
+  setSessionId: (id) => set({ sessionId: id }),
+  // 턴 제한 설정
+  maxTurns: typeof window !== "undefined" 
+    ? parseInt(process.env.NEXT_PUBLIC_MAX_TURNS || "30", 10)
+    : 30,
+  setMaxTurns: (turns) => set({ maxTurns: turns }),
+}),
     {
       name: "life-theater-storage",
       partialize: (state) => ({

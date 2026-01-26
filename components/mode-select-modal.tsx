@@ -17,11 +17,7 @@ export function ModeSelectModal() {
 
   const handleSelectMode = (mode: "actor" | "director") => {
     setGameMode(mode)
-    if (mode === "actor") {
-      setStep("avatar-upload")
-    } else {
-      setStep("scenario-setup")
-    }
+    setStep("character-select")
   }
 
   const handleClose = () => {
