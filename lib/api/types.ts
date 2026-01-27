@@ -84,6 +84,107 @@ export interface Voice {
     description?: string;  // optional - 설명 필드
 }
 
+// 관리자용 음성 상세 정보
+export interface VoiceDetail extends Voice {
+    ref_audio_path: string;
+    prompt_text?: string;
+    prompt_lang: string;
+    gpt_weights_path?: string;
+    sovits_weights_path?: string;
+    model_version?: string;
+    train_voice_folder?: string;
+    is_default: boolean;
+    is_active: boolean;
+    created_at?: string;
+    updated_at?: string;
+}
+
+// 음성 생성 요청
+export interface VoiceCreateRequest {
+    name: string;
+    description?: string;
+    language?: string;
+    ref_audio_path: string;
+    prompt_text?: string;
+    prompt_lang?: string;
+    gpt_weights_path?: string;
+    sovits_weights_path?: string;
+    model_version?: string;
+    train_voice_folder?: string;
+    is_default?: boolean;
+    is_active?: boolean;
+}
+
+// 음성 수정 요청
+export interface VoiceUpdateRequest {
+    name?: string;
+    description?: string;
+    language?: string;
+    ref_audio_path?: string;
+    prompt_text?: string;
+    prompt_lang?: string;
+    gpt_weights_path?: string;
+    sovits_weights_path?: string;
+    model_version?: string;
+    train_voice_folder?: string;
+    is_default?: boolean;
+    is_active?: boolean;
+}
+
+// 음성 목록 응답
+export interface VoiceListResponse {
+    voices: VoiceDetail[];
+    total: number;
+}
+
+// 음성 테스트 응답
+export interface VoiceTestResponse {
+    audio_base64: string;
+    format: string;
+    voice_id: string;
+    voice_name: string;
+    text: string;
+}
+
+// Server A 파일 목록 응답
+export interface FileInfo {
+    name: string;
+    stem: string;
+    path: string;
+    size_bytes: number;
+    size_mb: number;
+    modified_at: string;
+}
+
+export interface TrainVoiceInfo {
+    character_name: string;
+    path: string;
+    file_count: number;
+    total_size_mb: number;
+    status: string;
+}
+
+export interface ServerFilesResponse {
+    models: {
+        gpt: Record<string, FileInfo[]>;
+        sovits: Record<string, FileInfo[]>;
+        summary?: {
+            gpt_total: number;
+            sovits_total: number;
+        };
+    };
+    train_voices: {
+        voices: TrainVoiceInfo[];
+        total: number;
+        base_path?: string;
+    };
+    ref_audio: {
+        ref_audio: FileInfo[];
+        total: number;
+        base_path?: string;
+    };
+}
+
 // ============ Generation API ============
 export interface GenerationRequest {
     image: File;

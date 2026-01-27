@@ -6,7 +6,8 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { useAppStore } from "@/lib/store"
 import { useRouter } from "next/navigation"
-import { Theater, Sparkles, User, Trash2, Clock, MapPin, LogOut } from "lucide-react"
+import Link from "next/link"
+import { Theater, Sparkles, User, Trash2, Clock, MapPin, LogOut, ShieldCheck } from "lucide-react"
 
 export function LandingPage() {
   const {
@@ -20,6 +21,7 @@ export function LandingPage() {
     loadChatHistory,
     deleteChatHistory,
     goToHome,
+    isAdmin,
   } = useAppStore()
   const [showHistory, setShowHistory] = useState(false)
   const [isMounted, setIsMounted] = useState(false)
@@ -108,6 +110,18 @@ export function LandingPage() {
 
           {/* User Info and Logout */}
           <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-card border border-border" suppressHydrationWarning>
+            {isAdmin && (
+              <Link href="/admin/voices" className="flex items-center" suppressHydrationWarning>
+                <button
+                   className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-secondary transition-colors text-sm text-foreground font-medium mr-2"
+                   title="관리자 페이지"
+                   suppressHydrationWarning
+                >
+                  <ShieldCheck className="h-4 w-4 text-primary" suppressHydrationWarning />
+                  <span suppressHydrationWarning>관리자</span>
+                </button>
+              </Link>
+            )}
             {userName && (
               <span className="text-sm text-foreground font-medium" suppressHydrationWarning>
                 {userName}

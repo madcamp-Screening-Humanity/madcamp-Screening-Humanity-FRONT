@@ -57,6 +57,8 @@ interface AppState {
   setStep: (step: AppStep) => void
   isLoggedIn: boolean
   setIsLoggedIn: (value: boolean) => void
+  isAdmin: boolean
+  setIsAdmin: (value: boolean) => void
   userName: string
   setUserName: (name: string) => void
   displayName: string
@@ -118,6 +120,8 @@ export const useAppStore = create<AppState>()(
       setStep: (step) => set({ step }),
       isLoggedIn: false,
       setIsLoggedIn: (value) => set({ isLoggedIn: value }),
+      isAdmin: false,
+      setIsAdmin: (value) => set({ isAdmin: value }),
       userName: "",
       setUserName: (name) => set({ userName: name }),
       displayName: "",
@@ -263,6 +267,7 @@ export const useAppStore = create<AppState>()(
         userName: state.userName,
         displayName: state.displayName,
         isLoggedIn: state.isLoggedIn,
+        isAdmin: state.isAdmin,
       }),
     }
   )

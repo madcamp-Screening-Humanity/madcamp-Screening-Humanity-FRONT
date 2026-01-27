@@ -6,6 +6,12 @@ import type {
     TTSRequest,
     TTSResponse,
     Voice,
+    VoiceDetail,
+    VoiceCreateRequest,
+    VoiceUpdateRequest,
+    VoiceListResponse,
+    VoiceTestResponse,
+    ServerFilesResponse, // NEW
     GenerationResponse,
     GenerationStatus,
     StyleTransferResponse,
@@ -169,6 +175,146 @@ export const ttsApi = {
     getAudioUrl(audioPath: string): string {
         if (audioPath.startsWith('http')) return audioPath;
         return `${API_BASE_URL}${audioPath}`;
+    },
+};
+
+// ============ Voice API (관리자) ============
+export const voiceApi = {
+    /**
+     * 음성 목록 조회 (활성화된 음성만)
+     */
+    async listVoices(activeOnly: boolean = true): Promise<ApiResponse<VoiceListResponse>> {
+        const response = await fetch(`${API_V1}/voices?active_only=${activeOnly}`, {
+            credentials: 'include',
+        });
+        return handleResponse<VoiceListResponse>(response);
+    },
+
+    /**
+     * 특정 음성 조회
+     */
+    async getVoice(voiceId: string): Promise<ApiResponse<VoiceDetail>> {
+        const response = await fetch(`${API_V1}/voices/${voiceId}`, {
+            credentials: 'include',
+        });
+        return handleResponse<VoiceDetail>(response);
+    },
+
+    /**
+     * 음성 생성 (관리자 전용)
+     */
+    async createVoice(request: VoiceCreateRequest): Promise<ApiResponse<VoiceDetail>> {
+        const response = await fetch(`${API_V1}/voices`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(request),
+        });
+        return handleResponse<VoiceDetail>(response);
+    },
+
+    /**
+     * 음성 수정 (관리자 전용)
+     */
+    async updateVoice(voiceId: string, request: VoiceUpdateRequest): Promise<ApiResponse<VoiceDetail>> {
+        const response = await fetch(`${API_V1}/voices/${voiceId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(request),
+        });
+        return handleResponse<VoiceDetail>(response);
+    },
+
+    /**
+     * 음성 삭제 (관리자 전용)
+     */
+    async deleteVoice(voiceId: string, permanent: boolean = false): Promise<ApiResponse<{ message: string }>> {
+        const response = await fetch(`${API_V1}/voices/${voiceId}?permanent=${permanent}`, {
+            method: 'DELETE',
+            credentials: 'include',
+        });
+        return handleResponse<{ message: string }>(response);
+    },
+
+    /**
+     * 음성 테스트 (TTS 생성)
+     */
+    async testVoice(voiceId: string, text: string = "안녕하세요, 반갑습니다."): Promise<ApiResponse<VoiceTestResponse>> {
+        const response = await fetch(`${API_V1}/voices/${voiceId}/test`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ text }),
+        });
+        return handleResponse<VoiceTestResponse>(response);
+    },
+
+    /**
+     * Base64 오디오를 재생 가능한 URL로 변환
+     */
+    base64ToAudioUrl(base64: string, format: string = 'wav'): string {
+        return `data:audio/${format};base64,${base64}`;
+    },
+
+    /**
+     * Server A 파일 목록 조회 (관리자 전용)
+     */
+    async getServerFiles(): Promise<ApiResponse<ServerFilesResponse>> {
+        const response = await fetch(`${API_V1}/voices/server-files`, {
+            credentials: 'include',
+        });
+        return handleResponse<ServerFilesResponse>(response);
+    },
+
+    /**
+     * Server A 파일 업로드 (관리자 전용)
+     */
+    async uploadServerFile(
+        file: File,
+        category: 'ref_audio' | 'train_voice' | 'gpt_weights' | 'sovits_weights',
+        subPath?: string,
+        modelVersion: string = 'v2'
+    ): Promise<ApiResponse<{ filename: string; path: string; size_bytes: number }>> {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('category', category);
+        if (subPath) formData.append('sub_path', subPath);
+        formData.append('model_version', modelVersion);
+
+        // 타임아웃 처리는 브라우저 기본값(보통 300초)을 따름
+        const response = await fetch(`${API_V1}/voices/server-files/upload`, {
+            method: 'POST',
+            body: formData, // Content-Type은 자동 설정됨
+            credentials: 'include',
+        });
+        return handleResponse(response);
+    },
+
+    /**
+     * Server A 파일 삭제 (관리자 전용)
+     */
+    async deleteServerFile(path: string): Promise<ApiResponse<{ success: boolean; message: string }>> {
+        const response = await fetch(`${API_V1}/voices/server-files?path=${encodeURIComponent(path)}`, {
+            method: 'DELETE',
+            credentials: 'include',
+        });
+        return handleResponse(response);
+    },
+
+    /**
+     * Server A 훈련 폴더 생성 (관리자 전용)
+     */
+    async createServerFolder(path: string): Promise<ApiResponse<{ success: boolean; path: string }>> {
+        const formData = new FormData();
+        formData.append('path', path);
+
+        const response = await fetch(`${API_V1}/voices/server-files/mkdir`, {
+            method: 'POST',
+            body: formData,
+            credentials: 'include',
+        });
+        return handleResponse(response);
     },
 };
 
@@ -517,6 +663,7 @@ export const characterApi = {
 export const api = {
     chat: chatApi,
     tts: ttsApi,
+    voice: voiceApi,
     generation: generationApi,
     style: styleApi,
     animation: animationApi,

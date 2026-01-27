@@ -6,7 +6,7 @@ import { useAppStore } from "@/lib/store"
 
 export default function AuthCallbackPage() {
     const router = useRouter()
-    const { setIsLoggedIn, setUserName } = useAppStore()
+    const { setIsLoggedIn, setUserName, setIsAdmin } = useAppStore()
 
     useEffect(() => {
         // 쿠키에 토큰이 설정되었는지 확인
@@ -37,6 +37,7 @@ export default function AuthCallbackPage() {
                     const userData = await response.json()
                     console.log("사용자 정보:", userData)
                     setIsLoggedIn(true)
+                    setIsAdmin(userData.is_admin || false)
                     if (userData.username) {
                         setUserName(userData.username)
                     }
