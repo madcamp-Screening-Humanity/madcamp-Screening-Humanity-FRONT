@@ -194,13 +194,9 @@ export function CharacterSelectModal() {
     // 저장된 캐릭터 목록 새로고침
     loadSavedCharacters()
 
-    // 다음 단계로 이동
-    if (gameMode === "actor") {
-      setStep("avatar-upload")
-    } else {
-      setStep("scenario-setup")
-    }
-  }, [setSelectedCharacter, setStep, gameMode, loadSavedCharacters])
+    // 캐릭터 저장 후 시나리오 설정으로 이동 (모든 모드에서 동일)
+    setStep("scenario-setup")
+  }, [setSelectedCharacter, setStep, loadSavedCharacters])
 
   const handleWizardCancel = useCallback(() => {
     setShowWizard(false)

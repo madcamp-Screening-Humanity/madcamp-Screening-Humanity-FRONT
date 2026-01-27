@@ -61,11 +61,11 @@ export interface TTSRequest {
     speed?: number;
     language?: string;
     // GPT-SoVITS 파라미터
-    streaming_mode?: number; // 0-3
+    streaming_mode?: number;  // 0-3
     return_binary?: boolean;
     text_lang?: string;
     prompt_lang?: string;
-    media_type?: string; // "wav" | "ogg" | "aac" | "raw"
+    media_type?: string;  // "wav" | "ogg" | "aac" | "raw"
 }
 
 export interface TTSResponse {
@@ -80,7 +80,7 @@ export interface Voice {
     id: string;
     name: string;
     language: string;
-    gender?: string;  // optional - 실제 API 응답에 없을 수 있음
+    gender?: string;       // optional - 실제 API 응답에 없을 수 있음
     description?: string;  // optional - 설명 필드
 }
 
@@ -164,11 +164,35 @@ export interface SystemStatus {
 }
 
 // ============ Character API ============
+// 캐릭터 인터페이스 - 상세 필드 지원
 export interface Character {
     id: string;
     name: string;
     description?: string;
+    
+    // 상세 스펙
+    gender?: string;
+    species?: string;
+    age?: string;
+    height?: string;
+    job?: string;
+    
+    // 상세 페르소나
+    personality?: string;
+    appearance?: string;
+    likes?: string[];
+    dislikes?: string[];
+    speech_style?: string;
+    thoughts?: string;
+    features?: string;
+    habits?: string;      // 말버릇
+    guidelines?: string;
+    worldview?: string;   // 세계관 (신규)
+
+    // [DEPRECATED in JSON] 저장되지 않으며, 런타임에 buildSystemPersona 함수로 생성됨.
+    // 하지만 백엔드 API와의 통신을 위해 타입 정의에는 남겨둠 (optional)
     persona?: string;
+    
     voice_id?: string;
     category?: string;
     tags?: string[];
@@ -183,10 +207,32 @@ export interface PresetCharacter extends Character {
     is_preset: true;
 }
 
+// 캐릭터 생성 요청 - 상세 필드 지원
 export interface CreateCharacterRequest {
     name: string;
     description?: string;
+    
+    // 상세 스펙
+    gender?: string;
+    species?: string;
+    age?: string;
+    height?: string;
+    job?: string;
+    
+    // 상세 페르소나
+    personality?: string;
+    appearance?: string;
+    likes?: string[];
+    dislikes?: string[];
+    speech_style?: string;
+    thoughts?: string;
+    features?: string;
+    habits?: string;
+    guidelines?: string;
+    worldview?: string;   // 세계관 (신규)
+
     persona?: string;
+    
     voice_id?: string;
     category?: string;
     tags?: string[];
@@ -194,10 +240,32 @@ export interface CreateCharacterRequest {
     image_url?: string;
 }
 
+// 캐릭터 업데이트 요청 - 상세 필드 지원
 export interface UpdateCharacterRequest {
     name?: string;
     description?: string;
+    
+    // 상세 스펙
+    gender?: string;
+    species?: string;
+    age?: string;
+    height?: string;
+    job?: string;
+    
+    // 상세 페르소나
+    personality?: string;
+    appearance?: string;
+    likes?: string[];
+    dislikes?: string[];
+    speech_style?: string;
+    thoughts?: string;
+    features?: string;
+    habits?: string;
+    guidelines?: string;
+    worldview?: string;   // 세계관 (신규)
+
     persona?: string;
+    
     voice_id?: string;
     category?: string;
     tags?: string[];

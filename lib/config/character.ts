@@ -3,9 +3,20 @@
  */
 
 // Gemini API 설정
+// 사용 가능한 최신 모델 목록 (2026.01 기준):
+// [Gemini 3 Series - Preview]
+// - "gemini-3-pro-preview" (최고 성능, 멀티모달, 추론 특화)
+// - "gemini-3-flash-preview" (균형 잡힌 성능, 고속, 기본값)
+//
+// [Gemini 2.5 Series - Stable]
+// - "gemini-2.5-flash" (대규모 처리)
+// - "gemini-2.5-flash-lite" (초고속, 저비용)
+// - "gemini-2.5-pro" (고성능 추론, 코딩/수학 특화)
+const GEMINI_MODEL = process.env.NEXT_PUBLIC_GEMINI_MODEL || "gemini-2.5-flash";
+
 export const GEMINI_CONFIG = {
   API_URL: process.env.NEXT_PUBLIC_GEMINI_API_URL || 
-    "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
   API_KEY: process.env.NEXT_PUBLIC_GEMINI_API_KEY || "",
 }
 
