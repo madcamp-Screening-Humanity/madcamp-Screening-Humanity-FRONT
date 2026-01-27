@@ -23,7 +23,7 @@ const CharacterCreationWizard = lazy(() =>
 )
 
 export function CharacterSelectModal() {
-  const { step, setStep, gameMode, setSelectedCharacter, selectedCharacter, secondCharacter, setSecondCharacter } = useAppStore()
+  const { step, setStep, gameMode, setSelectedCharacter, selectedCharacter, secondCharacter, setSecondCharacter, goToHome } = useAppStore()
   const { toast } = useToast()
   const isOpen = step === "character-select"
 
@@ -137,7 +137,27 @@ export function CharacterSelectModal() {
       setStep("scenario-setup")
     } else if (gameMode === "director") {
       // 감독 모드: 2개 캐릭터 선택 필요
-      if (!firstCharacter) {
+      
+      // 이미 선택 완료된 상태에서 같은 캐릭터를 다시 클릭하면 선택 해제
+      if (selectedCharacter && selectedCharacter.id === character.id) {
+        // 첫 번째 캐릭터 선택 해제
+        setSelectedCharacter(null)
+        setSecondCharacter(null)
+        setFirstCharacter(null)
+        toast({
+          title: "선택 취소",
+          description: "캐릭터 선택이 취소되었습니다.",
+        })
+      } else if (secondCharacter && secondCharacter.id === character.id) {
+        // 두 번째 캐릭터 선택 해제
+        setSecondCharacter(null)
+        setSelectedCharacter(null)
+        setFirstCharacter(null)
+        toast({
+          title: "선택 취소",
+          description: "캐릭터 선택이 취소되었습니다.",
+        })
+      } else if (!firstCharacter) {
         // 첫 번째 캐릭터 선택
         setFirstCharacter(character)
         toast({

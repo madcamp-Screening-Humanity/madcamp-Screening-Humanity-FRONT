@@ -33,6 +33,8 @@ export interface ChatRequest {
     tts_mode?: "realtime" | "delayed" | "on_click";
     tts_delay_ms?: number;
     tts_streaming_mode?: number;
+    // 감독 중재 필드
+    director_note?: string;
 }
 
 export interface ChatResponse {
