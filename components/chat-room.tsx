@@ -147,7 +147,7 @@ export function ChatRoom() {
           try {
             // 첫 번째 캐릭터가 먼저 말하기
             // 감독 모드용 프롬프트: 상대방을 인간으로 인식하고 자연스럽게 대화
-            const directorPersona1 = `${buildSystemPersona(selectedCharacter)}
+            const directorPersona1 = `${buildSystemPersona(selectedCharacter, scenario.background || generatedScript || scenario.situation)}
 
 중요: 당신은 ${character1Name}입니다. ${character2Name}은(는) 당신과 대화하는 실제 사람입니다. 
 ${character2Name}을(를) 분석하거나 해석하지 말고, ${character2Name}의 말에 직접적으로 반응하며 자연스럽게 대화하세요.
@@ -162,14 +162,14 @@ ${character2Name}을(를) 분석하거나 해석하지 말고, ${character2Name}
               character_id: selectedCharacter.id,
               scenario: {
                 opponent: character2Name,
-                situation: generatedScript || scenario.situation,
+                situation: scenario.background || generatedScript || scenario.situation,
               },
               session_id: sessionId,
               tts_enabled: ttsEnabled,
               tts_mode: ttsMode,
               tts_delay_ms: ttsDelayMs,
               tts_streaming_mode: ttsStreamingMode,
-              temperature: 0.7,
+              temperature: 0.8,
               max_tokens: 512,
             })
 
@@ -198,7 +198,7 @@ ${character2Name}을(를) 분석하거나 해석하지 말고, ${character2Name}
               setTimeout(async () => {
                 try {
                   // 감독 모드용 프롬프트: 상대방을 인간으로 인식하고 자연스럽게 대화
-                  const directorPersona2 = `${buildSystemPersona(secondCharacter)}
+                  const directorPersona2 = `${buildSystemPersona(secondCharacter, scenario.background || generatedScript || scenario.situation)}
 
 중요: 당신은 ${character2Name}입니다. ${character1Name}은(는) 당신과 대화하는 실제 사람입니다.
 ${character1Name}을(를) 분석하거나 해석하지 말고, ${character1Name}의 말에 직접적으로 반응하며 자연스럽게 대화하세요.
@@ -214,14 +214,14 @@ ${character1Name}을(를) 분석하거나 해석하지 말고, ${character1Name}
                     character_id: secondCharacter.id,
                     scenario: {
                       opponent: character1Name,
-                      situation: generatedScript || scenario.situation,
+                      situation: scenario.background || generatedScript || scenario.situation,
                     },
                     session_id: sessionId,
                     tts_enabled: ttsEnabled,
                     tts_mode: ttsMode,
                     tts_delay_ms: ttsDelayMs,
                     tts_streaming_mode: ttsStreamingMode,
-                    temperature: 0.7,
+                    temperature: 0.8,
                     max_tokens: 512,
                   })
 
@@ -285,18 +285,18 @@ ${character1Name}을(를) 분석하거나 해석하지 말고, ${character1Name}
           try {
             const response = await chatApi.chat({
               messages: [],
-              persona: buildSystemPersona(selectedCharacter),
+              persona: buildSystemPersona(selectedCharacter, scenario.background || generatedScript || scenario.situation),
               character_id: selectedCharacter.id,
               scenario: {
                 opponent: scenario.opponent,
-                situation: generatedScript || scenario.situation,
+                situation: scenario.background || generatedScript || scenario.situation,
               },
               session_id: sessionId,
               tts_enabled: ttsEnabled,
               tts_mode: ttsMode,
               tts_delay_ms: ttsDelayMs,
               tts_streaming_mode: ttsStreamingMode,
-              temperature: 0.7,
+              temperature: 0.8,
               max_tokens: 512,
             })
 
@@ -416,7 +416,7 @@ ${nextOpponent?.name}을(를) 분석하거나 해석하지 말고, ${nextOpponen
               tts_mode: ttsMode,
               tts_delay_ms: ttsDelayMs,
               tts_streaming_mode: ttsStreamingMode,
-              temperature: 0.7,
+              temperature: 0.8,
               max_tokens: 512,
             })
 
@@ -508,7 +508,7 @@ ${nextOpponent?.name}을(를) 분석하거나 해석하지 말고, ${nextOpponen
 
         const response = await retryWithBackoff(async () => {
           // 감독 모드용 프롬프트: 상대방을 인간으로 인식하고 자연스럽게 대화
-          const directorPersona = `${buildSystemPersona(currentCharacter!)}
+          const directorPersona = `${buildSystemPersona(currentCharacter!, scenario.background || generatedScript || scenario.situation)}
 
 중요: 당신은 ${currentCharacter?.name}입니다. ${opponentCharacter?.name}은(는) 당신과 대화하는 실제 사람입니다.
 ${opponentCharacter?.name}을(를) 분석하거나 해석하지 말고, ${opponentCharacter?.name}의 말에 직접적으로 반응하며 자연스럽게 대화하세요.
@@ -541,7 +541,7 @@ ${opponentCharacter?.name}을(를) 분석하거나 해석하지 말고, ${oppone
             character_id: currentCharacter?.id,
             scenario: {
               opponent: opponentCharacter?.name || "",
-              situation: generatedScript || scenario.situation,
+              situation: scenario.background || generatedScript || scenario.situation,
             },
             session_id: sessionId,
             tts_enabled: ttsEnabled,
@@ -621,11 +621,11 @@ ${opponentCharacter?.name}을(를) 분석하거나 해석하지 말고, ${oppone
               })),
               { role: "user" as const, content: currentInput },
             ],
-            persona: buildSystemPersona(selectedCharacter!) || undefined,
+            persona: buildSystemPersona(selectedCharacter!, scenario.background || generatedScript || scenario.situation) || undefined,
             character_id: selectedCharacter?.id,
             scenario: {
               opponent: scenario.opponent,
-              situation: generatedScript || scenario.situation,
+              situation: scenario.background || generatedScript || scenario.situation,
             },
             session_id: sessionId,
             tts_enabled: ttsEnabled,
@@ -693,9 +693,33 @@ ${opponentCharacter?.name}을(를) 분석하거나 해석하지 말고, ${oppone
     setShowHints(false)
   }
 
+  // 메시지 정제 함수 (이름 제거, 이모티콘 제거)
+  const cleanContent = (content: string) => {
+    if (!content) return ""
+    // 1. 이름 제거 (예: "Elsa: Hello")
+    let text = content.replace(/^[^:]+:\s*/, "")
+    // 2. 이모티콘 및 특수 기호 제거 (광범위한 유니코드)
+    text = text.replace(/[\u{1F000}-\u{1FAFF}\u{2000}-\u{2BFF}\u{2600}-\u{27BF}\u{2300}-\u{23FF}]/gu, "")
+    // 3. 카오모지 및 한글 자음 남발 제거
+    text = text.replace(/(\^\^|T_T|-_-|ㅠ_ㅠ|ㅋ+|ㅎ+)/g, "")
+    // 4. 괄호 안의 지문은 유지하되, 괄호만 남는 경우 제거
+    text = text.replace(/\(\s*\)/g, "")
+    return text.trim()
+  }
+
   // 평가하기 핸들러
   const handleEvaluate = async () => {
     if (isEvaluating) return
+
+    // 최소 대화 조건 체크 (새 채팅방에서 바로 평가 방지)
+    if (turnCount < 1) {
+      toast({
+        title: "평가 불가",
+        description: "대화 내용이 너무 적습니다. 최소 1턴 이상 대화를 나눈 후에 평가를 받아보세요.",
+        variant: "destructive"
+      })
+      return
+    }
 
     if (!selectedCharacter) {
       toast({
@@ -728,7 +752,7 @@ ${opponentCharacter?.name}을(를) 분석하거나 해석하지 말고, ${oppone
 
       const response = await chatApi.chat({
         messages: messagesForEval,
-        character_id: selectedCharacter!.id,
+        character_id: selectedCharacter?.id || undefined,
         session_id: sessionId,
         temperature: 0.7,
         max_tokens: 512,
@@ -794,7 +818,9 @@ ${opponentCharacter?.name}을(를) 분석하거나 해석하지 말고, ${oppone
               ? `${character1Name} vs ${character2Name}`
               : scenario.opponent}
           </h1>
-          <p className="text-xs text-muted-foreground line-clamp-1">{scenario.situation}</p>
+          <p className="text-xs text-muted-foreground line-clamp-1">
+            {scenario.summary || scenario.situation || (scenario.opponent ? `${scenario.opponent}와의 대화` : "새로운 대화")}
+          </p>
         </div>
         <div className="flex items-center gap-4">
           <div className="text-sm">
@@ -866,7 +892,7 @@ ${opponentCharacter?.name}을(를) 분석하거나 해석하지 말고, ${oppone
                     onClick={() => handleMessageClick(msg)}
                   >
                     <p className="whitespace-pre-wrap break-words">
-                      {isDirectorUserMsg ? msg.content.replace("[감독 중재] ", "") : msg.content}
+                      {isDirectorUserMsg ? msg.content.replace("[감독 중재] ", "") : cleanContent(msg.content)}
                     </p>
                     {msg.audio_url && (
                       <div className="absolute -bottom-1 -right-1">

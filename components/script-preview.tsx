@@ -22,6 +22,7 @@ export function ScriptPreview() {
     step,
     setStep,
     scenario,
+    setScenario,
     userName,
     displayName,
     setDisplayName,
@@ -58,7 +59,7 @@ export function ScriptPreview() {
 
     try {
       let response
-      
+
       if (isDirectorMode && selectedCharacter && secondCharacter) {
         // 감독 모드: 2명의 캐릭터 정보 전송
         response = await storyApi.analyzeSituation({
@@ -81,11 +82,20 @@ export function ScriptPreview() {
       }
 
       if (response.success && response.data) {
-        // plot 필드 우선 사용, 없으면 story 필드 확인 (하위 호환)
-        const plot = (response.data as any).plot || (response.data as any).story || currentSituation
+        // 백엔드 응답: summary(1줄 요약), background(상세 상황)
+        // plot 필드가 있다면 하위 호환용
+        const { summary, background, plot } = response.data
+        const finalSituationDetail = background || plot || (response.data as any).story || currentSituation
+
+        // 시나리오 상태 업데이트 (ChatRoom에서 사용)
+        setScenario({
+          ...scenario,
+          summary: summary || "",
+          background: background || ""
+        })
 
         let generatedText: string
-        
+
         if (isDirectorMode && selectedCharacter && secondCharacter) {
           // 감독 모드: 두 캐릭터가 대화
           generatedText = `[ 상황 설명 ]
@@ -94,7 +104,9 @@ export function ScriptPreview() {
 
 ---
 
-${plot}
+
+${finalSituationDetail}
+
 
 ---
 
@@ -104,7 +116,7 @@ ${selectedCharacter.name}과(와) ${secondCharacter.name}의 역할을 맡은 AI
 감독으로서 대화의 흐름을 관전하세요.
 
 목표: 주어진 상황에서 두 캐릭터가 자연스럽게 대화를 이어가도록 합니다.
-제한: 30턴 이내에 대화를 마무리해야 합니다.
+제한: 10턴 이내에 대화를 마무리해야 합니다.
 
 행운을 빕니다!`
         } else {
@@ -116,7 +128,9 @@ ${selectedCharacter.name}과(와) ${secondCharacter.name}의 역할을 맡은 AI
 
 ---
 
-${plot}
+
+${finalSituationDetail}
+
 
 ---
 
@@ -126,7 +140,7 @@ ${opponentName}의 역할을 맡은 AI가 먼저 말을 걸 것입니다.
 ${finalName}(으)로서 자연스럽게 대화를 이어가세요.
 
 목표: 주어진 상황에서 원하는 결과를 이끌어내세요.
-제한: 30턴 이내에 대화를 마무리해야 합니다.
+제한: 10턴 이내에 대화를 마무리해야 합니다.
 
 행운을 빕니다!`
         }

@@ -336,14 +336,14 @@ export const storyApi = {
         character1_persona?: string;
         character2_name?: string;
         character2_persona?: string;
-    }): Promise<ApiResponse<{ plot: string }>> {
+    }): Promise<ApiResponse<{ summary?: string; background?: string; plot?: string }>> {
         const response = await fetch(`${API_V1}/ai/generate/story`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
             body: JSON.stringify(request),
         });
-        return handleResponse<{ plot: string }>(response);
+        return handleResponse<{ summary?: string; background?: string; plot?: string }>(response);
     },
 };
 

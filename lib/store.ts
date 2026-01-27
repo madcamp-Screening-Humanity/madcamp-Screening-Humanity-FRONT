@@ -28,6 +28,8 @@ export interface ChatHistory {
   scenario: {
     opponent: string
     situation: string
+    summary?: string
+    background?: string
   }
   messages: Message[]
   turnCount: number
@@ -70,8 +72,10 @@ interface AppState {
   scenario: {
     opponent: string
     situation: string
+    summary?: string
+    background?: string
   }
-  setScenario: (scenario: { opponent: string; situation: string }) => void
+  setScenario: (scenario: { opponent: string; situation: string; summary?: string; background?: string }) => void
   generatedScript: string
   setGeneratedScript: (script: string) => void
   messages: Message[]
