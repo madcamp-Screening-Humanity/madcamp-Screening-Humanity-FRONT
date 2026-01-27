@@ -323,6 +323,7 @@ export const animationApi = {
 export const storyApi = {
     /**
      * 상황 분석 및 스토리 생성
+     * 경로: /ai/generate/story (브랜치 반영), 감독 모드 파라미터 유지
      */
     async analyzeSituation(request: {
         mode: "director" | "actor";
@@ -336,7 +337,7 @@ export const storyApi = {
         character2_name?: string;
         character2_persona?: string;
     }): Promise<ApiResponse<{ plot: string }>> {
-        const response = await fetch(`${API_V1}/story/analyze`, {
+        const response = await fetch(`${API_V1}/ai/generate/story`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
@@ -400,34 +401,20 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout:
 export const characterApi = {
     /**
      * 사전설정 캐릭터 목록 조회
-     * Frontend의 public/characters.json에서 직접 로드 (백엔드 서버 불필요)
+     * Next.js API Route (/api/characters)에서 public/characters/*.json 동적 로드
      */
     async listPresets(): Promise<ApiResponse<CharacterResponse>> {
         try {
-            // 먼저 Frontend의 public 폴더에서 직접 로드 시도
-            const localResponse = await fetch('/characters.json', {
+            // Next.js API Route 호출 (파일 시스템에서 동적으로 로드)
+            const response = await fetch('/api/characters', {
                 method: 'GET',
                 cache: 'no-cache',
             });
 
-            if (localResponse.ok) {
-                const data = await localResponse.json();
-                return {
-                    success: true,
-                    data: {
-                        characters: data.characters || []
-                    }
-                };
-            }
-
-            // Frontend 파일이 없으면 백엔드 API로 fallback
-            const response = await fetchWithTimeout(`${API_V1}/characters/presets`, {
-                credentials: 'include',
-            }, 10000);
             return handleResponse<CharacterResponse>(response);
         } catch (error) {
             console.error("listPresets fetch error:", error);
-            // 에러 발생 시에도 빈 배열 반환 (에러 메시지 표시하지 않음)
+            // 에러 발생 시에도 빈 배열 반환
             return {
                 success: true,
                 data: {

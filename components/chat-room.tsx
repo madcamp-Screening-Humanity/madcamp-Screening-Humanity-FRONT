@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast"
 import { useTTS } from "@/hooks/use-tts"
 import { TtsSettingsModal } from "@/components/tts-settings-modal"
 import { checkBackendHealth } from "@/lib/api/health-check"
+import { buildSystemPersona } from "@/lib/utils/persona-builder"
 import {
   Send,
   Lightbulb,
@@ -146,11 +147,11 @@ export function ChatRoom() {
           try {
             // 첫 번째 캐릭터가 먼저 말하기
             // 감독 모드용 프롬프트: 상대방을 인간으로 인식하고 자연스럽게 대화
-            const directorPersona1 = `${selectedCharacter.persona || ""}
+            const directorPersona1 = `${buildSystemPersona(selectedCharacter)}
 
 중요: 당신은 ${character1Name}입니다. ${character2Name}은(는) 당신과 대화하는 실제 사람입니다. 
 ${character2Name}을(를) 분석하거나 해석하지 말고, ${character2Name}의 말에 직접적으로 반응하며 자연스럽게 대화하세요.
-당신의 캐릭터 성격(${selectedCharacter.persona || ""})에 맞게 말하되, ${character2Name}과(와) 마치 실제 사람과 대화하는 것처럼 자연스럽게 대화하세요.`
+당신의 캐릭터 성격에 맞게 말하되, ${character2Name}과(와) 마치 실제 사람과 대화하는 것처럼 자연스럽게 대화하세요.`
 
             const response1 = await chatApi.chat({
               messages: [
@@ -197,11 +198,11 @@ ${character2Name}을(를) 분석하거나 해석하지 말고, ${character2Name}
               setTimeout(async () => {
                 try {
                   // 감독 모드용 프롬프트: 상대방을 인간으로 인식하고 자연스럽게 대화
-                  const directorPersona2 = `${secondCharacter.persona || ""}
+                  const directorPersona2 = `${buildSystemPersona(secondCharacter)}
 
 중요: 당신은 ${character2Name}입니다. ${character1Name}은(는) 당신과 대화하는 실제 사람입니다.
 ${character1Name}을(를) 분석하거나 해석하지 말고, ${character1Name}의 말에 직접적으로 반응하며 자연스럽게 대화하세요.
-당신의 캐릭터 성격(${secondCharacter.persona || ""})에 맞게 말하되, ${character1Name}과(와) 마치 실제 사람과 대화하는 것처럼 자연스럽게 대화하세요.`
+당신의 캐릭터 성격에 맞게 말하되, ${character1Name}과(와) 마치 실제 사람과 대화하는 것처럼 자연스럽게 대화하세요.`
 
                   const response2 = await chatApi.chat({
                     messages: [
@@ -284,7 +285,7 @@ ${character1Name}을(를) 분석하거나 해석하지 말고, ${character1Name}
           try {
             const response = await chatApi.chat({
               messages: [],
-              persona: selectedCharacter.persona,
+              persona: buildSystemPersona(selectedCharacter),
               character_id: selectedCharacter.id,
               scenario: {
                 opponent: scenario.opponent,
@@ -377,7 +378,7 @@ ${character1Name}을(를) 분석하거나 해석하지 말고, ${character1Name}
 
         setTimeout(async () => {
           try {
-            const nextDirectorPersona = `${nextCharacter.persona || ""}
+            const nextDirectorPersona = `${buildSystemPersona(nextCharacter)}
 
 중요: 당신은 ${nextCharacter.name}입니다. ${nextOpponent?.name}은(는) 당신과 대화하는 실제 사람입니다.
 ${nextOpponent?.name}을(를) 분석하거나 해석하지 말고, ${nextOpponent?.name}의 말에 직접적으로 반응하며 자연스럽게 대화하세요.
@@ -507,7 +508,7 @@ ${nextOpponent?.name}을(를) 분석하거나 해석하지 말고, ${nextOpponen
 
         const response = await retryWithBackoff(async () => {
           // 감독 모드용 프롬프트: 상대방을 인간으로 인식하고 자연스럽게 대화
-          const directorPersona = `${currentCharacter?.persona || ""}
+          const directorPersona = `${buildSystemPersona(currentCharacter!)}
 
 중요: 당신은 ${currentCharacter?.name}입니다. ${opponentCharacter?.name}은(는) 당신과 대화하는 실제 사람입니다.
 ${opponentCharacter?.name}을(를) 분석하거나 해석하지 말고, ${opponentCharacter?.name}의 말에 직접적으로 반응하며 자연스럽게 대화하세요.
@@ -620,7 +621,7 @@ ${opponentCharacter?.name}을(를) 분석하거나 해석하지 말고, ${oppone
               })),
               { role: "user" as const, content: currentInput },
             ],
-            persona: selectedCharacter?.persona || undefined,
+            persona: buildSystemPersona(selectedCharacter!) || undefined,
             character_id: selectedCharacter?.id,
             scenario: {
               opponent: scenario.opponent,

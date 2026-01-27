@@ -9,23 +9,32 @@ import { toAppError, ErrorCode } from "@/lib/api/errors"
 const GEMINI_API_KEY = GEMINI_CONFIG.API_KEY;
 const GEMINI_API_URL = GEMINI_CONFIG.API_URL;
 
-export interface GeneratedCharacter {
+// 상세 캐릭터 스펙 인터페이스 (16개 필드)
+export interface CharacterSpec {
     name: string;
-    persona: string;
+    gender: string;
+    species: string;
+    age: string;
+    height: string;
+    job: string;
+    personality: string;
+    appearance: string;
     description: string;
-    category?: string;
-    tags?: string[];
-    sample_dialogue?: string;
+    worldview: string;  // 세계관
+    likes: string[];
+    dislikes: string[];
+    speech_style: string;
+    thoughts: string;
+    features: string;
+    habits: string;
+    guidelines: string;
 }
 
 /**
- * 작품명과 캐릭터명을 기반으로 Gemini API를 통해 캐릭터 정보를 자동 생성합니다.
- * @param workName 작품명 (선택적)
- * @param characterName 캐릭터명
- * @returns 생성된 캐릭터 정보
- */
-/**
  * 재시도 로직 (지수 백오프)
+ * @param fn 재시도할 함수
+ * @param maxRetries 최대 재시도 횟수
+ * @param initialDelay 초기 대기 시간 (ms)
  */
 async function retryWithBackoff<T>(
     fn: () => Promise<T>,
@@ -51,96 +60,105 @@ async function retryWithBackoff<T>(
     throw lastError
 }
 
-export async function generateCharacterFromReference(
-    workName: string | null,
-    characterName: string
-): Promise<GeneratedCharacter> {
+// 상세 캐릭터 입력 인터페이스
+export interface DetailedCharacterInput {
+    name: string;
+    category: string;      // 카테고리 (필수)
+    source_work: string;   // 작품명 (필수)
+    concept?: string;      // 사용자가 입력하지 않을 수도 있음 (AI가 추론)
+    worldview?: string;
+    gender?: string;
+    species?: string;
+}
+
+/**
+ * 사용자 입력 정보를 바탕으로 캐릭터의 상세 스펙을 JSON 객체로 생성합니다.
+ * @param input 캐릭터 기본 정보 (이름, 카테고리, 작품명 등)
+ * @returns 생성된 캐릭터 상세 스펙
+ */
+export async function generateCharacterSpec(
+    input: DetailedCharacterInput
+): Promise<CharacterSpec> {
+    // API KEY 확인
     if (!GEMINI_API_KEY) {
-        throw new Error("Gemini API 키가 설정되지 않았습니다. NEXT_PUBLIC_GEMINI_API_KEY 환경 변수를 확인해주세요.");
+        console.error("Gemini API Key is missing!");
+        throw new Error("Gemini API 키가 설정되지 않았습니다.");
     }
 
-    // 프롬프트 구성
-    const workContext = workName ? `${workName}의 ` : "";
-    const prompt = `${workContext}${characterName} 캐릭터에 대한 상세한 정보를 JSON 형식으로 생성해주세요.
+    const { name, category, source_work, concept = "", worldview = "", gender = "", species = "" } = input;
 
-다음 필드들을 포함해야 합니다:
-- name: 캐릭터 이름
-- persona: 캐릭터의 성격, 말투, 행동 패턴을 상세히 설명 (200자 이상). 다음 형식으로 작성:
-  * 성격: [주요 성격 특성]
-  * 말투: [사용하는 말투와 어미]
-  * 배경: [캐릭터의 배경이나 설정]
-  * 목표: [캐릭터의 목표나 동기]
-- description: 캐릭터에 대한 간단한 설명 (50자 이내)
-- category: 카테고리 (애니메이션, 소설, 영화 등)
-- tags: 태그 배열 (최대 5개)
-- sample_dialogue: 캐릭터의 말투를 보여주는 샘플 대화 (1-2문장)
+    // 상세 캐릭터 생성 프롬프트
+    const prompt = `당신은 창의적인 캐릭터 설정 전문가입니다.
+사용자가 제공한 정보를 바탕으로 캐릭터의 상세 설정을 한국어로 작성하여 JSON 형식으로 응답해주세요.
+특히 '작품명'이 제공되면 해당 작품의 '이름'을 가진 캐릭터 정보를 정확하게 찾아서 채워주세요. (없는 작품이면 창작해주세요)
 
-중요: persona 필드는 반드시 "성격:", "말투:", "배경:", "목표:" 형식으로 구조화하여 작성해주세요.
-JSON 형식으로만 응답해주세요. 다른 설명은 포함하지 마세요.`;
+## 입력 정보
+- 이름: ${name}
+- 카테고리: ${category}
+- 작품명(출처): ${source_work}
+${concept ? `- 추가 컨셉: ${concept}` : ""}
+${worldview ? `- 세계관: ${worldview}` : ""}
+
+## 요구사항
+다음 JSON 스키마를 정확히 따라주세요. 모든 필드는 필수입니다.
+빈칸이 없도록 내용을 풍부하게 채워주세요. 작품의 고증을 철저히 지켜주세요.
+{
+  "name": "캐릭터 이름",
+  "gender": "성별",
+  "species": "종족",
+  "age": "나이 (예: 14세)",
+  "height": "키 (예: 148cm)",
+  "job": "직업",
+  "worldview": "세계관 (예: 해리포터 세계관, 마법이 존재하는 현대 등)",
+  "personality": "성격 (콤마로 구분된 특성들 10개 이상 나열)",
+  "appearance": "외모 (머리, 눈, 체형, 복장 등 상세 묘사)",
+  "description": "설명 (캐릭터의 배경 스토리와 현재 상황 3-5문장)",
+  "likes": ["좋아하는 것 1", "좋아하는 것 2", ... (8개 이상)],
+  "dislikes": ["싫어하는 것 1", "싫어하는 것 2", ... (5개 이상)],
+  "speech_style": "말투 (구체적인 어조, 어미, 특징 상세 설명)",
+  "thoughts": "생각 (대표적인 속마음 대사 3개 이상, 인용구로 표현)",
+  "features": "특징 (행동 패턴, 독특한 습관 등)",
+  "habits": "말버릇 (자주 쓰는 감탄사나 의성어)",
+  "guidelines": "가이드라인 (롤플레이 시 주의할 점 3-5항목)"
+}
+
+응답은 오직 JSON 형식이어야 합니다. 마크다운 코드 블록(\`\`\`json)으로 감싸주세요.`;
 
     return retryWithBackoff(async () => {
-        try {
-            const response = await fetch(
-                `${GEMINI_API_URL}?key=${GEMINI_API_KEY}`,
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        contents: [
-                            {
-                                parts: [
-                                    {
-                                        text: prompt,
-                                    },
-                                ],
-                            },
-                        ],
-                    }),
-                }
-            );
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                const appError = toAppError(
-                    new Error(`Gemini API 호출 실패: ${response.status} ${response.statusText}`)
-                )
-                appError.details = errorData
-                throw appError
+        const response = await fetch(
+            `${GEMINI_API_URL}?key=${GEMINI_API_KEY}`,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: prompt }] }]
+                }),
             }
+        );
 
-            const data = await response.json();
-            
-            // Gemini API 응답에서 텍스트 추출
-            const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (!text) {
-                throw toAppError(new Error("Gemini API 응답에서 텍스트를 찾을 수 없습니다."))
-            }
-
-            // JSON 파싱 (마크다운 코드 블록 제거)
-            let jsonText = text.trim();
-            if (jsonText.startsWith("```json")) {
-                jsonText = jsonText.replace(/^```json\s*/, "").replace(/\s*```$/, "");
-            } else if (jsonText.startsWith("```")) {
-                jsonText = jsonText.replace(/^```\s*/, "").replace(/\s*```$/, "");
-            }
-
-            const characterData = JSON.parse(jsonText) as GeneratedCharacter;
-
-            // 필수 필드 검증
-            if (!characterData.name || !characterData.persona) {
-                throw toAppError(new Error("생성된 캐릭터 정보에 필수 필드가 누락되었습니다."))
-            }
-
-            return characterData;
-        } catch (error) {
-            // 이미 AppError인 경우 그대로 throw
-            if (error && typeof error === "object" && "code" in error) {
-                throw error
-            }
-            // 그 외의 경우 AppError로 변환
-            throw toAppError(error)
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(`Gemini API Error: ${response.statusText} ${JSON.stringify(errorData)}`);
         }
-    }, 3, 1000) // 최대 3회 재시도, 초기 지연 1초
+
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        
+        if (!text) throw new Error("No text response from Gemini");
+
+        // JSON 파싱 (마크다운 코드 블록 제거)
+        let jsonText = text.trim();
+        if (jsonText.startsWith("```json")) {
+            jsonText = jsonText.replace(/^```json\s*/, "").replace(/\s*```$/, "");
+        } else if (jsonText.startsWith("```")) {
+            jsonText = jsonText.replace(/^```\s*/, "").replace(/\s*```$/,"");
+        }
+
+        try {
+            return JSON.parse(jsonText) as CharacterSpec;
+        } catch (e) {
+            console.error("JSON Parse Error:", jsonText);
+            throw new Error("Gemini 응답을 JSON으로 파싱할 수 없습니다.");
+        }
+    }, 3, 1000);
 }
