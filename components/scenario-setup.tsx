@@ -19,6 +19,7 @@ export function ScenarioSetup() {
   const { step, setStep, setScenario, selectedCharacter, secondCharacter, gameMode, setGeneratedScript } = useAppStore()
   const [opponent, setOpponent] = useState(selectedCharacter?.name || "")
   const [situation, setSituation] = useState("")
+  const [background, setBackground] = useState("")
 
   const isVisible = step === "scenario-setup"
   const isDirectorMode = gameMode === "director"
@@ -40,6 +41,7 @@ export function ScenarioSetup() {
     setScenario({
       opponent: finalOpponent,
       situation,
+      ...(background.trim() ? { background: background.trim() } : {}),
     })
     setGeneratedScript("") // 새로운 분석을 위해 이전 스크립트 초기화
     setStep("script-preview")
@@ -163,6 +165,23 @@ export function ScenarioSetup() {
                 시간, 장소, 감정 상태, 목표 등을 포함하면 좋습니다.
               </p>
             </div>
+          </div>
+
+          <div className="space-y-3">
+            <Label htmlFor="background" className="text-foreground text-base">
+              배경 (선택)
+            </Label>
+            <Textarea
+              id="background"
+              placeholder="예: 어두운 마법탑 안, 촛불만 겨우 비추는 서고. 먼지와 고서 냄새."
+              value={background}
+              onChange={(e) => setBackground(e.target.value)}
+              rows={2}
+              className="bg-secondary/50 border-border text-foreground placeholder:text-muted-foreground resize-none"
+            />
+            <p className="text-xs text-muted-foreground">
+              장소·분위기 등 추가 맥락을 넣으면 대사 톤에 반영됩니다.
+            </p>
           </div>
         </div>
       </div>

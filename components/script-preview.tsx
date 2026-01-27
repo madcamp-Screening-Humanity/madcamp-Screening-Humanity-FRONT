@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label"
 import { useAppStore } from "@/lib/store"
 import { Textarea } from "@/components/ui/textarea"
 import { storyApi } from "@/lib/api/client"
+import { LlmSelectModal } from "@/components/llm-select-modal"
 import {
   ArrowLeft,
   ArrowRight,
@@ -22,6 +23,7 @@ export function ScriptPreview() {
     step,
     setStep,
     scenario,
+    setScenario,
     userName,
     displayName,
     setDisplayName,
@@ -30,6 +32,7 @@ export function ScriptPreview() {
     selectedCharacter,
     secondCharacter,
     gameMode,
+    setChatModel,
   } = useAppStore()
   const [isGenerating, setIsGenerating] = useState(false)
   const [script, setScript] = useState("")
@@ -37,6 +40,7 @@ export function ScriptPreview() {
   const [showNameInput, setShowNameInput] = useState(false)
   const [isEditingScript, setIsEditingScript] = useState(false)
   const [editedScript, setEditedScript] = useState("")
+  const [showLlmModal, setShowLlmModal] = useState(false)
 
   const isVisible = step === "script-preview"
 
@@ -83,9 +87,11 @@ export function ScriptPreview() {
       if (response.success && response.data) {
         // plot 필드 우선 사용, 없으면 story 필드 확인 (하위 호환)
         const plot = (response.data as any).plot || (response.data as any).story || currentSituation
+        const background = (response.data as any).background ?? ""
+        setScenario({ ...scenario, background })
 
         let generatedText: string
-        
+
         if (isDirectorMode && selectedCharacter && secondCharacter) {
           // 감독 모드: 두 캐릭터가 대화
           generatedText = `[ 상황 설명 ]
@@ -104,7 +110,6 @@ ${selectedCharacter.name}과(와) ${secondCharacter.name}의 역할을 맡은 AI
 감독으로서 대화의 흐름을 관전하세요.
 
 목표: 주어진 상황에서 두 캐릭터가 자연스럽게 대화를 이어가도록 합니다.
-제한: 30턴 이내에 대화를 마무리해야 합니다.
 
 행운을 빕니다!`
         } else {
@@ -126,7 +131,6 @@ ${opponentName}의 역할을 맡은 AI가 먼저 말을 걸 것입니다.
 ${finalName}(으)로서 자연스럽게 대화를 이어가세요.
 
 목표: 주어진 상황에서 원하는 결과를 이끌어내세요.
-제한: 30턴 이내에 대화를 마무리해야 합니다.
 
 행운을 빕니다!`
         }
@@ -151,6 +155,12 @@ ${finalName}(으)로서 자연스럽게 대화를 이어가세요.
     } else if (!displayName) {
       setDisplayName(userName)
     }
+    // 모달 띄우기
+    setShowLlmModal(true)
+  }
+
+  const handleModelSelect = (model: "gemini-3-flash-preview" | "gemini-2.5-flash" | "gemma-3-27b-it") => {
+    setChatModel(model)
     setStep("loading")
   }
 
@@ -169,6 +179,11 @@ ${finalName}(으)로서 자연스럽게 대화를 이어가세요.
 
   return (
     <div className="min-h-screen flex flex-col bg-background" suppressHydrationWarning>
+      <LlmSelectModal
+        open={showLlmModal}
+        onOpenChange={setShowLlmModal}
+        onSelect={handleModelSelect}
+      />
       <header className="p-4 border-b border-border flex items-center justify-between">
         <Button
           variant="ghost"
@@ -267,7 +282,7 @@ ${finalName}(으)로서 자연스럽게 대화를 이어가세요.
                 <Loader2 className="h-8 w-8 text-primary animate-spin" />
                 <div className="text-center space-y-1">
                   <p className="text-foreground font-medium">시나리오 생성 중...</p>
-                  <p className="text-muted-foreground text-xs">잠시만 기다려주세요. AI가 상황을 분석하고 있습니다.</p>
+                  <p className="text-muted-foreground text-xs">예상 소요 시간: 10~30초 (Gemini 3.0 Flash Preview 및 Google Search)</p>
                 </div>
               </div>
             ) : isEditingScript ? (

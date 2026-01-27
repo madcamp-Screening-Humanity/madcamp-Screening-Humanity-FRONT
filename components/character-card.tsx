@@ -1,8 +1,7 @@
 "use client"
 
 import { Character } from "@/lib/store"
-import { useState } from "react"
-import { ChevronDown, ChevronUp, Edit2, Trash2 } from "lucide-react"
+import { Edit2, Trash2 } from "lucide-react"
 import { IMAGE_FALLBACK } from "@/lib/config/character"
 
 interface CharacterCardProps {
@@ -11,7 +10,6 @@ interface CharacterCardProps {
   onClick?: () => void
   onEdit?: (character: Character) => void
   onDelete?: (characterId: string) => void
-  showSampleDialogue?: boolean
 }
 
 export function CharacterCard({
@@ -20,10 +18,7 @@ export function CharacterCard({
   onClick,
   onEdit,
   onDelete,
-  showSampleDialogue = true,
 }: CharacterCardProps) {
-  const [isExpanded, setIsExpanded] = useState(false)
-
   const imageUrl = character.image_url || IMAGE_FALLBACK.CHARACTER_PLACEHOLDER
   const tags = character.tags || []
 
@@ -148,32 +143,6 @@ export function CharacterCard({
           </div>
         )}
 
-        {/* 샘플 대화 (확장 가능) */}
-        {showSampleDialogue && character.sample_dialogue && (
-          <div className="pt-2 border-t border-border">
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                setIsExpanded(!isExpanded)
-              }}
-              aria-expanded={isExpanded}
-              aria-label={isExpanded ? "샘플 대화 접기" : "샘플 대화 펼치기"}
-              className="flex items-center justify-between w-full text-xs text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary rounded"
-            >
-              <span>샘플 대화</span>
-              {isExpanded ? (
-                <ChevronUp className="h-3 w-3" />
-              ) : (
-                <ChevronDown className="h-3 w-3" />
-              )}
-            </button>
-            {isExpanded && (
-              <p className="mt-2 text-sm text-foreground italic">
-                "{character.sample_dialogue}"
-              </p>
-            )}
-          </div>
-        )}
       </div>
     </div>
   )

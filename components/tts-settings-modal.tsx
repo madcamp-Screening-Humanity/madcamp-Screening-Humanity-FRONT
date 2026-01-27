@@ -14,6 +14,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import { useAppStore } from "@/lib/store"
+import { settingsApi } from "@/lib/api/client"
 import { Settings, Volume2, Clock, MousePointerClick } from "lucide-react"
 
 export function TtsSettingsModal({
@@ -32,18 +33,33 @@ export function TtsSettingsModal({
     setTtsStreamingMode,
     ttsEnabled,
     setTtsEnabled,
+    ttsSpeed,
+    setTtsSpeed,
+    isLoggedIn,
   } = useAppStore()
 
   const [localTtsMode, setLocalTtsMode] = useState<"realtime" | "delayed" | "on_click">(ttsMode)
   const [localTtsDelayMs, setLocalTtsDelayMs] = useState(ttsDelayMs)
   const [localTtsStreamingMode, setLocalTtsStreamingMode] = useState(ttsStreamingMode)
   const [localTtsEnabled, setLocalTtsEnabled] = useState(ttsEnabled)
+  const [localTtsSpeed, setLocalTtsSpeed] = useState(ttsSpeed)
 
   const handleSave = () => {
     setTtsMode(localTtsMode)
     setTtsDelayMs(localTtsDelayMs)
     setTtsStreamingMode(localTtsStreamingMode)
     setTtsEnabled(localTtsEnabled)
+    setTtsSpeed(localTtsSpeed)
+    // 로그인 시 store 변경을 서버에 반영 (PUT /api/users/me/settings)
+    if (isLoggedIn) {
+      settingsApi.putMySettings({
+        tts_mode: localTtsMode,
+        tts_delay_ms: localTtsDelayMs,
+        tts_streaming_mode: localTtsStreamingMode,
+        tts_enabled: localTtsEnabled,
+        tts_speed: localTtsSpeed,
+      }).catch(() => { /* 무시 */ })
+    }
     onOpenChange(false)
   }
 
@@ -53,6 +69,7 @@ export function TtsSettingsModal({
     setLocalTtsDelayMs(ttsDelayMs)
     setLocalTtsStreamingMode(ttsStreamingMode)
     setLocalTtsEnabled(ttsEnabled)
+    setLocalTtsSpeed(ttsSpeed)
     onOpenChange(false)
   }
 
@@ -169,9 +186,30 @@ export function TtsSettingsModal({
                 </div>
               )}
 
+              {/* 발화 속도 (speed_factor) */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-foreground">발화 속도</Label>
+                  <span className="text-sm text-muted-foreground">
+                    {localTtsSpeed.toFixed(1)}
+                  </span>
+                </div>
+                <Slider
+                  value={[localTtsSpeed]}
+                  onValueChange={([value]) => setLocalTtsSpeed(value)}
+                  min={0.5}
+                  max={2}
+                  step={0.1}
+                  className="w-full"
+                />
+                <p className="text-xs text-muted-foreground">
+                  TTS 발화 속도. 1.0이 보통, 1.5는 빠르게, 0.8은 느리게.
+                </p>
+              </div>
+
               {/* Streaming Mode 설정 */}
               <div className="space-y-3">
-                <Label className="text-foreground">품질/속도 설정</Label>
+                <Label className="text-foreground">품질/속도 (streaming_mode)</Label>
                 <RadioGroup
                   value={localTtsStreamingMode.toString()}
                   onValueChange={(value) => setLocalTtsStreamingMode(parseInt(value, 10))}
@@ -179,36 +217,36 @@ export function TtsSettingsModal({
                   <div className="flex items-center space-x-2 p-3 rounded-lg border border-border hover:bg-secondary/50 transition-colors">
                     <RadioGroupItem value="0" id="mode-0" />
                     <Label htmlFor="mode-0" className="flex-1 cursor-pointer">
-                      <div className="font-medium text-foreground">모드 0: 비활성화</div>
+                      <div className="font-medium text-foreground">모드 0: 비활성화 (전체 생성 후 반환)</div>
                       <div className="text-xs text-muted-foreground">
-                        전체 생성 후 반환 (가장 느림, 최고 품질)
+                        생성 완료 후 재생 (가장 느림, 안정적)
                       </div>
                     </Label>
                   </div>
                   <div className="flex items-center space-x-2 p-3 rounded-lg border border-border hover:bg-secondary/50 transition-colors">
                     <RadioGroupItem value="1" id="mode-1" />
                     <Label htmlFor="mode-1" className="flex-1 cursor-pointer">
-                      <div className="font-medium text-foreground">모드 1: 고품질 스트리밍</div>
+                      <div className="font-medium text-foreground">모드 1: 고품질 스트리밍 (응답 속도 느림)</div>
                       <div className="text-xs text-muted-foreground">
-                        느림, 고품질
+                        구버전 스트리밍 방식
                       </div>
                     </Label>
                   </div>
                   <div className="flex items-center space-x-2 p-3 rounded-lg border border-border hover:bg-secondary/50 transition-colors">
                     <RadioGroupItem value="2" id="mode-2" />
                     <Label htmlFor="mode-2" className="flex-1 cursor-pointer">
-                      <div className="font-medium text-foreground">모드 2: 중간 품질 스트리밍</div>
+                      <div className="font-medium text-foreground">모드 2: 중간 품질 스트리밍 (응답 속도 보통)</div>
                       <div className="text-xs text-muted-foreground">
-                        보통 속도, 중간 품질
+                        밸런스 모드
                       </div>
                     </Label>
                   </div>
                   <div className="flex items-center space-x-2 p-3 rounded-lg border border-border hover:bg-secondary/50 transition-colors">
                     <RadioGroupItem value="3" id="mode-3" />
                     <Label htmlFor="mode-3" className="flex-1 cursor-pointer">
-                      <div className="font-medium text-foreground">모드 3: 저품질 스트리밍</div>
+                      <div className="font-medium text-foreground">모드 3: 저품질 스트리밍 (응답 속도 매우 빠름)</div>
                       <div className="text-xs text-muted-foreground">
-                        매우 빠름, 저품질
+                        최고 속도
                       </div>
                     </Label>
                   </div>

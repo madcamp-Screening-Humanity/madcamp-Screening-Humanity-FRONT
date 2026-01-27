@@ -23,7 +23,7 @@ const CharacterCreationWizard = lazy(() =>
 )
 
 export function CharacterSelectModal() {
-  const { step, setStep, gameMode, setSelectedCharacter, selectedCharacter, secondCharacter, setSecondCharacter, goToHome } = useAppStore()
+  const { step, setStep, gameMode, setSelectedCharacter, selectedCharacter, secondCharacter, setSecondCharacter, goToHome, isLoggedIn } = useAppStore()
   const { toast } = useToast()
   const isOpen = step === "character-select"
 
@@ -35,6 +35,7 @@ export function CharacterSelectModal() {
   const [confirmingCharacter, setConfirmingCharacter] = useState<Character | null>(null)
   const [loading, setLoading] = useState(false)
   const [showWizard, setShowWizard] = useState(false)
+  const [hasWizardDirty, setHasWizardDirty] = useState(false)
   const [editingCharacter, setEditingCharacter] = useState<Character | null>(null)
 
   // 감독 모드용: 첫 번째 캐릭터는 로컬 state로 관리 (선택 중인 상태)
@@ -236,9 +237,29 @@ export function CharacterSelectModal() {
     setStep("mode-select")
   }, [setStep])
 
+  // 나만의 캐릭터 만들기: 로그인 필수. 비로그인 시 토스트 후 진입 차단.
+  const openWizardOrPromptLogin = useCallback(() => {
+    if (!isLoggedIn) {
+      toast({
+        title: "로그인 후 나만의 캐릭터를 만들 수 있습니다.",
+        variant: "destructive",
+      })
+      return
+    }
+    setShowWizard(true)
+  }, [isLoggedIn, toast])
+
   if (showWizard) {
     return (
-      <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
+      <Dialog
+        open={isOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            if (hasWizardDirty && !window.confirm("저장하지 않고 나가시겠습니까? 입력한 데이터가 사라집니다.")) return
+            setShowWizard(false)
+          }
+        }}
+      >
         <DialogContent className="w-full h-full sm:h-auto sm:max-w-2xl max-h-[90vh] overflow-y-auto bg-card border-border">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold text-foreground flex items-center gap-2">
@@ -258,6 +279,7 @@ export function CharacterSelectModal() {
               onComplete={handleWizardComplete}
               onCancel={handleWizardCancel}
               initialData={editingCharacter}
+              onDirtyChange={setHasWizardDirty}
             />
           </Suspense>
         </DialogContent>
@@ -306,7 +328,7 @@ export function CharacterSelectModal() {
               저장된 캐릭터
             </button>
             <button
-              onClick={() => setShowWizard(true)}
+              onClick={openWizardOrPromptLogin}
               className={`
                 flex-1 py-2 text-sm font-medium transition-colors
                 ${activeTab === "create"
@@ -360,7 +382,6 @@ export function CharacterSelectModal() {
                             : selectedCharacterId === character.id
                         }
                         onClick={() => handleCharacterSelect(character)}
-                        showSampleDialogue={true}
                       />
                     ))}
                   </div>
@@ -374,7 +395,7 @@ export function CharacterSelectModal() {
                       저장된 캐릭터가 없습니다.
                     </p>
                     <Button
-                      onClick={() => setShowWizard(true)}
+                      onClick={openWizardOrPromptLogin}
                       variant="outline"
                       className="border-border"
                       aria-label="새 캐릭터 만들기"
@@ -397,7 +418,6 @@ export function CharacterSelectModal() {
                         onClick={() => handleCharacterSelect(character)}
                         onEdit={handleEditCharacter}
                         onDelete={handleDeleteCharacter}
-                        showSampleDialogue={true}
                       />
                     ))}
                   </div>

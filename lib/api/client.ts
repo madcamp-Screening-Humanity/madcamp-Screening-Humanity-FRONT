@@ -11,7 +11,12 @@ import type {
     VoiceUpdateRequest,
     VoiceListResponse,
     VoiceTestResponse,
-    ServerFilesResponse, // NEW
+    VoiceLinkOption,
+    ServerFilesResponse,
+    ModelMakeUploadResponse,
+    ModelMakeStartRequest,
+    ModelMakeRegisterRequest,
+    ModelMakeMyResponse,
     GenerationResponse,
     GenerationStatus,
     StyleTransferResponse,
@@ -19,11 +24,13 @@ import type {
     AnimationsResponse,
     StoryRequest,
     StoryResponse,
-    SystemStatus,
+    SystemStatusResponse,
+    DetailedSystemStatus,
     Character,
     CharacterResponse,
     CreateCharacterRequest,
     UpdateCharacterRequest,
+    AdminCharacterListItem,
 } from './types';
 
 // API Base URL - 환경변수에서 가져오거나 기본값 사용
@@ -76,15 +83,23 @@ export const chatApi = {
             const response = await fetch(`${API_V1}/chat`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',  // 쿠키 전달 (get_current_user_optional, 비로그인 시 None)
                 body: JSON.stringify({
                     messages: request.messages,
-                    model: request.model || 'gemma-3-27b-it',
+                    model: request.model || 'glm-4.7-flash',
                     temperature: request.temperature || 0.7,
                     max_tokens: request.max_tokens || 512,
-                    persona: request.persona,  // 페르소나 전달
-                    scenario: request.scenario,  // 시나리오 정보 전달
+                    persona: request.persona,
+                    scenario: request.scenario,
                     session_id: request.session_id,
                     character_id: request.character_id,
+                    tts_enabled: request.tts_enabled,
+                    tts_mode: request.tts_mode,
+                    tts_delay_ms: request.tts_delay_ms,
+                    tts_streaming_mode: request.tts_streaming_mode,
+                    tts_speed: request.tts_speed,
+                    director_note: request.director_note,
+                    current_speaker: request.current_speaker,
                 }),
                 signal: controller.signal,
             });
@@ -250,6 +265,12 @@ export const voiceApi = {
         return handleResponse<VoiceTestResponse>(response);
     },
 
+    /** 캐릭터 voice_id 선택용 (내 Voice + 시스템 Voice) */
+    async getVoiceLinkOptions(): Promise<ApiResponse<VoiceLinkOption[]>> {
+        const response = await fetch(`${API_V1}/voices/link-options`, { credentials: 'include' });
+        return handleResponse<VoiceLinkOption[]>(response);
+    },
+
     /**
      * Base64 오디오를 재생 가능한 URL로 변환
      */
@@ -268,24 +289,19 @@ export const voiceApi = {
     },
 
     /**
-     * Server A 파일 업로드 (관리자 전용)
+     * 훈련 데이터(train_voice) 오디오 파일 업로드 (관리자 전용).
+     * .wav, .mp3, .flac, .ogg만 허용.
      */
-    async uploadServerFile(
+    async uploadTrainVoiceFile(
         file: File,
-        category: 'ref_audio' | 'train_voice' | 'gpt_weights' | 'sovits_weights',
-        subPath?: string,
-        modelVersion: string = 'v2'
+        subPath: string
     ): Promise<ApiResponse<{ filename: string; path: string; size_bytes: number }>> {
         const formData = new FormData();
         formData.append('file', file);
-        formData.append('category', category);
-        if (subPath) formData.append('sub_path', subPath);
-        formData.append('model_version', modelVersion);
-
-        // 타임아웃 처리는 브라우저 기본값(보통 300초)을 따름
+        formData.append('sub_path', subPath);
         const response = await fetch(`${API_V1}/voices/server-files/upload`, {
             method: 'POST',
-            body: formData, // Content-Type은 자동 설정됨
+            body: formData,
             credentials: 'include',
         });
         return handleResponse(response);
@@ -312,6 +328,39 @@ export const voiceApi = {
         const response = await fetch(`${API_V1}/voices/server-files/mkdir`, {
             method: 'POST',
             body: formData,
+            credentials: 'include',
+        });
+        return handleResponse(response);
+    },
+
+    /**
+     * 학습 시작 (관리자 전용)
+     */
+    async startTraining(request: import('./types').TrainStartRequest): Promise<ApiResponse<import('./types').TrainingStatus>> {
+        const response = await fetch(`${API_V1}/voices/train/start`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(request),
+        });
+        return handleResponse(response);
+    },
+
+    /**
+     * 학습 상태 조회
+     */
+    async getTrainingStatus(modelName: string): Promise<ApiResponse<import('./types').TrainingStatus>> {
+        const response = await fetch(`${API_V1}/voices/train/status/${modelName}`, {
+            credentials: 'include',
+        });
+        return handleResponse(response);
+    },
+
+    /**
+     * 학습 로그 조회
+     */
+    async getTrainingLog(modelName: string): Promise<ApiResponse<import('./types').TrainingLog>> {
+        const response = await fetch(`${API_V1}/voices/train/log/${modelName}`, {
             credentials: 'include',
         });
         return handleResponse(response);
@@ -482,14 +531,14 @@ export const storyApi = {
         character1_persona?: string;
         character2_name?: string;
         character2_persona?: string;
-    }): Promise<ApiResponse<{ plot: string }>> {
+    }): Promise<ApiResponse<{ plot: string; background?: string }>> {
         const response = await fetch(`${API_V1}/ai/generate/story`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
             body: JSON.stringify(request),
         });
-        return handleResponse<{ plot: string }>(response);
+        return handleResponse<{ plot: string; background?: string }>(response);
     },
 };
 
@@ -498,21 +547,50 @@ export const systemApi = {
     /**
      * 시스템 상태 조회
      */
-    async getStatus(): Promise<ApiResponse<SystemStatus>> {
+    async getStatus(): Promise<ApiResponse<import('./types').SystemStatusResponse>> {
         const response = await fetch(`${API_V1}/system/status`, {
             credentials: 'include',  // 쿠키 자동 전달
         });
-        return handleResponse<SystemStatus>(response);
+        return handleResponse<import('./types').SystemStatusResponse>(response);
     },
 
     /**
-     * 헬스 체크
+     * 헬스 체크 (상세)
+     */
+    async getDetailedHealth(): Promise<ApiResponse<import('./types').SystemStatusResponse>> {
+        const response = await fetch(`${API_V1}/system/health/detailed`, {
+            credentials: 'include',
+        });
+        return handleResponse(response);
+    },
+
+    /**
+     * 헬스 체크 (간단)
      */
     async healthCheck(): Promise<ApiResponse<{ status: string }>> {
         const response = await fetch(`${API_V1}/system/health`, {
             credentials: 'include',  // 쿠키 자동 전달
         });
         return handleResponse(response);
+    },
+};
+
+// ============ Users / Settings API (GET/PUT /api/users/me/settings) ============
+export const settingsApi = {
+    /** 로그인 사용자 설정 조회. 비로그인 시 401. */
+    async getMySettings(): Promise<ApiResponse<Record<string, unknown>>> {
+        const response = await fetch(`${API_V1}/users/me/settings`, { credentials: 'include' });
+        return handleResponse<Record<string, unknown>>(response);
+    },
+    /** 로그인 사용자 설정 부분 업데이트 (tts_mode, tts_delay_ms, tts_streaming_mode, tts_enabled, tts_speed). */
+    async putMySettings(body: Record<string, unknown>): Promise<ApiResponse<Record<string, unknown>>> {
+        const response = await fetch(`${API_V1}/users/me/settings`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(body),
+        });
+        return handleResponse<Record<string, unknown>>(response);
     },
 };
 
@@ -591,6 +669,42 @@ export const characterApi = {
         }
     },
 
+    /** 내 캐릭터 페르소나 목록 (user_id=me) */
+    async listMyCharacters(): Promise<ApiResponse<CharacterResponse>> {
+        const response = await fetch(`${API_V1}/characters/my`, { credentials: 'include' });
+        return handleResponse<CharacterResponse>(response);
+    },
+
+    /** 관리자: DB+Preset 캐릭터 통합 목록 (캐릭터–Voice 연결/교체용) */
+    async listAdminCharacters(): Promise<ApiResponse<{ characters: AdminCharacterListItem[] }>> {
+        const response = await fetch(`${API_V1}/characters/admin/all`, { credentials: 'include' });
+        return handleResponse<{ characters: AdminCharacterListItem[] }>(response);
+    },
+
+    /** 관리자: 캐릭터 voice_id만 수정 (null=연결 해제) */
+    async updateCharacterVoice(
+        characterId: string,
+        voiceId: string | null
+    ): Promise<ApiResponse<{ id: string; name: string; voice_id: string | null }>> {
+        const response = await fetch(`${API_V1}/characters/admin/${characterId}/voice`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ voice_id: voiceId }),
+        });
+        return handleResponse<{ id: string; name: string; voice_id: string | null }>(response);
+    },
+    /** 내 캐릭터 생성 */
+    async createMyCharacter(request: CreateCharacterRequest): Promise<ApiResponse<Character>> {
+        const response = await fetch(`${API_V1}/characters/my`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(request),
+        });
+        return handleResponse<Character>(response);
+    },
+
     /**
      * AI를 사용하여 캐릭터 상세 정보 자동 생성
      */
@@ -659,6 +773,54 @@ export const characterApi = {
     },
 };
 
+// ============ Model Make API ============
+export const modelMakeApi = {
+    async upload(files: File[]): Promise<ApiResponse<ModelMakeUploadResponse>> {
+        const form = new FormData();
+        files.forEach((f) => form.append('files', f));
+        const res = await fetch(`${API_V1}/model-make/upload`, { method: 'POST', body: form, credentials: 'include' });
+        return handleResponse<ModelMakeUploadResponse>(res);
+    },
+    async start(body: ModelMakeStartRequest): Promise<ApiResponse<unknown>> {
+        const res = await fetch(`${API_V1}/model-make/start`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body),
+        });
+        return handleResponse(res);
+    },
+    async status(modelName: string): Promise<ApiResponse<{ status?: string; progress?: number; message?: string }>> {
+        const res = await fetch(`${API_V1}/model-make/status/${encodeURIComponent(modelName)}`, { credentials: 'include' });
+        return handleResponse(res);
+    },
+    async log(modelName: string): Promise<ApiResponse<{ log?: string }>> {
+        const res = await fetch(`${API_V1}/model-make/log/${encodeURIComponent(modelName)}`, { credentials: 'include' });
+        return handleResponse(res);
+    },
+    async register(body: ModelMakeRegisterRequest): Promise<ApiResponse<{ voice_id: string; name: string }>> {
+        const res = await fetch(`${API_V1}/model-make/register`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body),
+        });
+        return handleResponse(res);
+    },
+    async my(): Promise<ApiResponse<ModelMakeMyResponse>> {
+        const res = await fetch(`${API_V1}/model-make/my`, { credentials: 'include' });
+        return handleResponse<ModelMakeMyResponse>(res);
+    },
+    async deleteMy(voiceId: string): Promise<ApiResponse<{ message: string }>> {
+        const res = await fetch(`${API_V1}/model-make/my/${voiceId}`, { method: 'DELETE', credentials: 'include' });
+        return handleResponse(res);
+    },
+    /** 모델 제작 중단(트랜잭션 롤백): train_input_dir·logs·TEMP 삭제. Voice 등록 전 나가기 시 호출 */
+    async abort(payload: { train_input_dir: string; model_name?: string }): Promise<ApiResponse<{ message: string }>> {
+        const res = await fetch(`${API_V1}/model-make/abort`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(payload),
+        });
+        return handleResponse(res);
+    },
+};
+
 // ============ 통합 API 객체 ============
 export const api = {
     chat: chatApi,
@@ -670,6 +832,7 @@ export const api = {
     story: storyApi,
     system: systemApi,
     character: characterApi,
+    modelMake: modelMakeApi,
 };
 
 export default api;

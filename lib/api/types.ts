@@ -27,14 +27,17 @@ export interface ChatRequest {
     scenario?: {
         opponent?: string;
         situation?: string;
+        background?: string;
     };
     // TTS 관련 필드
     tts_enabled?: boolean;
     tts_mode?: "realtime" | "delayed" | "on_click";
     tts_delay_ms?: number;
     tts_streaming_mode?: number;
+    tts_speed?: number;  // 발화 속도 (1.0=정속, 0.5~2.0)
     // 감독 중재 필드
     director_note?: string;
+    current_speaker?: string;  // 현재 말할 캐릭터 (감독 모드용)
 }
 
 export interface ChatResponse {
@@ -93,10 +96,21 @@ export interface VoiceDetail extends Voice {
     sovits_weights_path?: string;
     model_version?: string;
     train_voice_folder?: string;
+    train_input_dir?: string | null;   // 모델 제작 업로드 경로
+    training_model_name?: string | null;  // 학습 model_name
     is_default: boolean;
     is_active: boolean;
+    user_id?: string | null;  // 소유자 (null=시스템)
     created_at?: string;
     updated_at?: string;
+}
+
+// 캐릭터 voice_id 선택용 (DB Voice만, gpt/sovits 1쌍)
+export interface VoiceLinkOption {
+    id: string;
+    name: string;
+    gpt_weights_path?: string;
+    sovits_weights_path?: string;
 }
 
 // 음성 생성 요청
@@ -111,6 +125,8 @@ export interface VoiceCreateRequest {
     sovits_weights_path?: string;
     model_version?: string;
     train_voice_folder?: string;
+    train_input_dir?: string;
+    training_model_name?: string;
     is_default?: boolean;
     is_active?: boolean;
 }
@@ -156,10 +172,17 @@ export interface FileInfo {
     modified_at: string;
 }
 
+export interface TrainVoiceFile {
+    name: string;
+    size_bytes: number;
+    size_mb?: number;
+}
+
 export interface TrainVoiceInfo {
     character_name: string;
     path: string;
     file_count: number;
+    files?: TrainVoiceFile[];
     total_size_mb: number;
     status: string;
 }
@@ -178,11 +201,72 @@ export interface ServerFilesResponse {
         total: number;
         base_path?: string;
     };
-    ref_audio: {
-        ref_audio: FileInfo[];
-        total: number;
-        base_path?: string;
+    /** logs/{model_name} 내 .ckpt/.pth (연관 gpt/sovits 후보) */
+    logs?: {
+        models: { model_name: string; gpt_path: string | null; sovits_path: string | null }[];
     };
+}
+
+// ============ Training API ============
+export interface TrainStartRequest {
+    model_name: string;
+    upload_path: string; // Server A 내부 경로 (ex: /opt/GPT-SoVITS/ref_audio/char1)
+    version?: string;    // v2, v2Pro, etc. (Default: v2)
+    batch_size?: number; // Default: 11 (depends on VRAM)
+    total_epochs?: number; 
+    save_every_epoch?: number;
+    gpu_numbers?: string; // "0-0"
+    dry_run?: boolean;   // Test mode
+}
+
+export interface TrainingStatus {
+    model_name: string;
+    status: 'queued' | 'processing' | 'completed' | 'failed';
+    progress: number; // 0.0 ~ 1.0
+    message: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface TrainingLog {
+    model_name: string;
+    log: string; // Full log content
+}
+
+// ============ Model Make API ============
+export interface ModelMakeUploadResponse {
+    success: boolean;
+    train_input_dir: string;
+    first_file: string;
+}
+
+export interface ModelMakeStartRequest {
+    model_name: string;
+    train_input_dir: string;
+    version?: string;
+}
+
+export interface ModelMakeRegisterRequest {
+    model_name: string;
+    voice_name: string;
+    train_input_dir: string;
+    ref_audio_file: string;
+    gpt_weights_path?: string;
+    sovits_weights_path?: string;
+}
+
+export interface ModelMakeMyVoice {
+    id: string;
+    name: string;
+    train_input_dir?: string | null;
+    training_model_name?: string | null;
+    created_at?: string | null;
+}
+
+export interface ModelMakeMyResponse {
+    success: boolean;
+    voices: ModelMakeMyVoice[];
+    total: number;
 }
 
 // ============ Generation API ============
@@ -252,14 +336,29 @@ export interface StoryResponse {
 }
 
 // ============ System API ============
-export interface SystemStatus {
-    status: string;
-    mode: string;
-    gpu_available: boolean;
+export interface DetailedSystemStatus {
+    timestamp: number;
     services: {
         [key: string]: {
-            status: string;
+            name: string;
+            status: "online" | "offline" | "error";
+            latency: number;
             url: string;
+            message?: string;
+        };
+    };
+}
+
+export interface SystemStatusResponse {
+    success: boolean;
+    timestamp: number;
+    services: {
+        [key: string]: {
+            name: string;
+            status: "online" | "offline" | "error";
+            latency: number;
+            url: string;
+            message?: string;
         };
     };
 }
@@ -289,6 +388,7 @@ export interface Character {
     habits?: string;      // 말버릇
     guidelines?: string;
     worldview?: string;   // 세계관 (신규)
+    source_work?: string; // 출처/작품 (선택, preset JSON 등)
 
     // [DEPRECATED in JSON] 저장되지 않으며, 런타임에 buildSystemPersona 함수로 생성됨.
     // 하지만 백엔드 API와의 통신을 위해 타입 정의에는 남겨둠 (optional)
@@ -297,7 +397,6 @@ export interface Character {
     voice_id?: string;
     category?: string;
     tags?: string[];
-    sample_dialogue?: string;
     image_url?: string;
     is_preset: boolean;
     user_id?: string;
@@ -331,13 +430,13 @@ export interface CreateCharacterRequest {
     habits?: string;
     guidelines?: string;
     worldview?: string;   // 세계관 (신규)
+    source_work?: string; // 출처/작품 (선택)
 
     persona?: string;
     
     voice_id?: string;
     category?: string;
     tags?: string[];
-    sample_dialogue?: string;
     image_url?: string;
 }
 
@@ -364,13 +463,13 @@ export interface UpdateCharacterRequest {
     habits?: string;
     guidelines?: string;
     worldview?: string;   // 세계관 (신규)
+    source_work?: string; // 출처/작품 (선택)
 
     persona?: string;
     
     voice_id?: string;
     category?: string;
     tags?: string[];
-    sample_dialogue?: string;
     image_url?: string;
 }
 
@@ -380,4 +479,13 @@ export interface CharacterResponse {
 
 export interface SingleCharacterResponse {
     character: Character;
+}
+
+/** 관리자: 캐릭터–Voice 연결/교체용 (DB+Preset 통합 목록 항목) */
+export interface AdminCharacterListItem {
+    id: string;
+    name: string;
+    voice_id: string | null;
+    is_preset: boolean;
+    user_id: string | null;
 }

@@ -100,9 +100,11 @@ export function ChatRoom() {
     ttsDelayMs,
     ttsStreamingMode,
     ttsEnabled,
+    ttsSpeed,
     sessionId,
     setSessionId,
     generatedScript,
+    chatModel,
   } = useAppStore()
   const { toast } = useToast()
   const { play: playAudio, isPlaying, stop: stopAudio } = useTTS()
@@ -118,11 +120,16 @@ export function ChatRoom() {
   const [lastProcessedMessageId, setLastProcessedMessageId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // 턴 제한 및 평가 관련 상태 (사용자 요청: 10턴)
-  const maxTurns = 10
+  // 턴 제한 및 평가 관련 상태
+  // Gemini 모델 사용 시 20턴 제한, 그 외(Ollama)는 무제한
+  const isGemini = chatModel?.startsWith("gemini-")
+  const maxTurns = isGemini ? 20 : 9999
+
   const [evaluationResult, setEvaluationResult] = useState<{ summary: string; score: number; comment: string } | null>(null)
   const [showEvaluationModal, setShowEvaluationModal] = useState(false)
   const [isEvaluating, setIsEvaluating] = useState(false)
+  const [firstDialogueError, setFirstDialogueError] = useState(false)
+  const [directorFirstDialogueError, setDirectorFirstDialogueError] = useState(false)
 
   const isVisible = step === "chat"
   const isDirectorMode = gameMode === "director"
@@ -142,6 +149,7 @@ export function ChatRoom() {
   useEffect(() => {
     if (isVisible && messages.length === 0 && selectedCharacter && sessionId) {
       if (isDirectorMode && secondCharacter) {
+        if (!directorFirstDialogueError) {
         // 감독 모드: 두 캐릭터가 대화 시작
         const startDirectorConversation = async () => {
           try {
@@ -163,14 +171,17 @@ ${character2Name}을(를) 분석하거나 해석하지 말고, ${character2Name}
               scenario: {
                 opponent: character2Name,
                 situation: generatedScript || scenario.situation,
+                ...(scenario.background ? { background: scenario.background } : {}),
               },
-              session_id: sessionId,
+              session_id: sessionId || undefined,
               tts_enabled: ttsEnabled,
               tts_mode: ttsMode,
               tts_delay_ms: ttsDelayMs,
               tts_streaming_mode: ttsStreamingMode,
+              tts_speed: ttsSpeed,
               temperature: 0.7,
               max_tokens: 512,
+              model: chatModel || undefined,
             })
 
             if (response1.success && response1.data?.content) {
@@ -192,6 +203,11 @@ ${character2Name}을(를) 분석하거나 해석하지 말고, ${character2Name}
                   ? response1.data.audio_url
                   : `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}${response1.data.audio_url}`
                 playAudio(audioUrl)
+              } else if (ttsMode === "delayed" && response1.data.audio_url) {
+                const audioUrl = response1.data.audio_url.startsWith("http")
+                  ? response1.data.audio_url
+                  : `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}${response1.data.audio_url}`
+                setTimeout(() => playAudio(audioUrl), ttsDelayMs)
               }
 
               // 잠시 후 두 번째 캐릭터가 응답
@@ -215,14 +231,17 @@ ${character1Name}을(를) 분석하거나 해석하지 말고, ${character1Name}
                     scenario: {
                       opponent: character1Name,
                       situation: generatedScript || scenario.situation,
+                      ...(scenario.background ? { background: scenario.background } : {}),
                     },
-                    session_id: sessionId,
+                    session_id: sessionId || undefined,
                     tts_enabled: ttsEnabled,
                     tts_mode: ttsMode,
                     tts_delay_ms: ttsDelayMs,
                     tts_streaming_mode: ttsStreamingMode,
+                    tts_speed: ttsSpeed,
                     temperature: 0.7,
                     max_tokens: 512,
+                    model: chatModel || undefined,
                   })
 
                   if (response2.success && response2.data?.content) {
@@ -245,6 +264,11 @@ ${character1Name}을(를) 분석하거나 해석하지 말고, ${character1Name}
                         ? response2.data.audio_url
                         : `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}${response2.data.audio_url}`
                       playAudio(audioUrl)
+                    } else if (ttsMode === "delayed" && response2.data.audio_url) {
+                      const audioUrl = response2.data.audio_url.startsWith("http")
+                        ? response2.data.audio_url
+                        : `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}${response2.data.audio_url}`
+                      setTimeout(() => playAudio(audioUrl), ttsDelayMs)
                     }
                   }
                 } catch (error) {
@@ -256,31 +280,15 @@ ${character1Name}을(를) 분석하거나 해석하지 말고, ${character1Name}
             }
           } catch (error) {
             console.error("감독 모드 초기 대화 오류:", error)
-            addMessage({
-              id: Date.now().toString(),
-              role: "assistant",
-              content: `${character1Name}: 안녕하세요. ${character2Name}님.`,
-              timestamp: new Date(),
-              emotion: character1Name,
-            })
-            incrementTurn()
+            setDirectorFirstDialogueError(true)
           }
         }
 
         startDirectorConversation()
-      } else {
-        // 주연 모드: 기존 로직
-        if (selectedCharacter.sample_dialogue) {
-          addMessage({
-            id: Date.now().toString(),
-            role: "assistant",
-            content: selectedCharacter.sample_dialogue,
-            timestamp: new Date(),
-          })
-          incrementTurn()
-          return
         }
-
+      } else {
+        // 주연 모드: 첫 대사 AI 생성 (sample_dialogue 제거)
+        if (!firstDialogueError) {
         const generateInitialMessage = async () => {
           try {
             const response = await chatApi.chat({
@@ -290,14 +298,17 @@ ${character1Name}을(를) 분석하거나 해석하지 말고, ${character1Name}
               scenario: {
                 opponent: scenario.opponent,
                 situation: generatedScript || scenario.situation,
+                ...(scenario.background ? { background: scenario.background } : {}),
               },
-              session_id: sessionId,
+              session_id: sessionId || undefined,
               tts_enabled: ttsEnabled,
               tts_mode: ttsMode,
               tts_delay_ms: ttsDelayMs,
               tts_streaming_mode: ttsStreamingMode,
+              tts_speed: ttsSpeed,
               temperature: 0.7,
               max_tokens: 512,
+              model: chatModel || undefined,
             })
 
             if (response.success && response.data?.content) {
@@ -315,26 +326,26 @@ ${character1Name}을(를) 분석하거나 해석하지 말고, ${character1Name}
                   ? response.data.audio_url
                   : `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}${response.data.audio_url}`
                 playAudio(audioUrl)
+              } else if (ttsMode === "delayed" && response.data.audio_url) {
+                const audioUrl = response.data.audio_url.startsWith("http")
+                  ? response.data.audio_url
+                  : `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}${response.data.audio_url}`
+                setTimeout(() => playAudio(audioUrl), ttsDelayMs)
               }
             } else {
               throw new Error(response?.error?.message || "초기 메시지 생성 실패")
             }
           } catch (error) {
             console.error("초기 메시지 생성 오류:", error)
-            addMessage({
-              id: Date.now().toString(),
-              role: "assistant",
-              content: `안녕하세요. ${scenario.opponent}입니다. 무슨 일이시죠?`,
-              timestamp: new Date(),
-            })
-            incrementTurn()
+            setFirstDialogueError(true)
           }
         }
 
         generateInitialMessage()
+        }
       }
     }
-  }, [isVisible, selectedCharacter, secondCharacter, isDirectorMode, sessionId, scenario, ttsEnabled, ttsMode, ttsDelayMs, ttsStreamingMode, addMessage, incrementTurn, playAudio, generatedScript, character1Name, character2Name])
+  }, [isVisible, selectedCharacter, secondCharacter, isDirectorMode, sessionId, scenario, ttsEnabled, ttsMode, ttsDelayMs, ttsStreamingMode, ttsSpeed, addMessage, incrementTurn, playAudio, generatedScript, character1Name, character2Name, firstDialogueError, directorFirstDialogueError, chatModel])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -410,14 +421,17 @@ ${nextOpponent?.name}을(를) 분석하거나 해석하지 말고, ${nextOpponen
               scenario: {
                 opponent: nextOpponent?.name || "",
                 situation: generatedScript || scenario.situation,
+                ...(scenario.background ? { background: scenario.background } : {}),
               },
-              session_id: sessionId,
+              session_id: sessionId || undefined,
               tts_enabled: ttsEnabled,
               tts_mode: ttsMode,
               tts_delay_ms: ttsDelayMs,
               tts_streaming_mode: ttsStreamingMode,
+              tts_speed: ttsSpeed,
               temperature: 0.7,
               max_tokens: 512,
+              model: chatModel || undefined,
             })
 
             if (autoResponse.success && autoResponse.data) {
@@ -458,7 +472,7 @@ ${nextOpponent?.name}을(를) 분석하거나 해석하지 말고, ${nextOpponen
         }, 2000) // 2초 후 자동 응답
       }
     }
-  }, [messages, isVisible, isDirectorMode, secondCharacter, selectedCharacter, turnCount, maxTurns, isAiTyping, lastProcessedMessageId, character1Name, character2Name, sessionId, ttsEnabled, ttsMode, ttsDelayMs, ttsStreamingMode, addMessage, incrementTurn, saveChatHistory, playAudio, generatedScript, scenario])
+  }, [messages, isVisible, isDirectorMode, secondCharacter, selectedCharacter, turnCount, maxTurns, isAiTyping, lastProcessedMessageId, character1Name, character2Name, sessionId, ttsEnabled, ttsMode, ttsDelayMs, ttsStreamingMode, ttsSpeed, addMessage, incrementTurn, saveChatHistory, playAudio, generatedScript, scenario, chatModel])
 
   useEffect(() => {
     if (turnCount >= maxTurns && !showEndModal) {
@@ -542,14 +556,17 @@ ${opponentCharacter?.name}을(를) 분석하거나 해석하지 말고, ${oppone
             scenario: {
               opponent: opponentCharacter?.name || "",
               situation: generatedScript || scenario.situation,
+              ...(scenario.background ? { background: scenario.background } : {}),
             },
-            session_id: sessionId,
+            session_id: sessionId || undefined,
             tts_enabled: ttsEnabled,
             tts_mode: ttsMode,
             tts_delay_ms: ttsDelayMs,
             tts_streaming_mode: ttsStreamingMode,
+            tts_speed: ttsSpeed,
             temperature: 0.7,
             max_tokens: 512,
+            model: chatModel || undefined,
           })
           if (!result || !result.success || !result.data?.content) {
             throw new Error(result?.error?.message || "채팅 응답 실패")
@@ -626,14 +643,17 @@ ${opponentCharacter?.name}을(를) 분석하거나 해석하지 말고, ${oppone
             scenario: {
               opponent: scenario.opponent,
               situation: generatedScript || scenario.situation,
+              ...(scenario.background ? { background: scenario.background } : {}),
             },
-            session_id: sessionId,
+            session_id: sessionId || undefined,
             tts_enabled: ttsEnabled,
             tts_mode: ttsMode,
             tts_delay_ms: ttsDelayMs,
             tts_streaming_mode: ttsStreamingMode,
+            tts_speed: ttsSpeed,
             temperature: 0.7,
             max_tokens: 512,
+            model: chatModel || undefined,
           })
           if (!result || !result.success || !result.data?.content) {
             throw new Error(result?.error?.message || "채팅 응답 실패")
@@ -676,7 +696,7 @@ ${opponentCharacter?.name}을(를) 분석하거나 해석하지 말고, ${oppone
         setIsAiTyping(false)
       }
     }
-  }, [input, turnCount, maxTurns, sessionId, messages, selectedCharacter, secondCharacter, isDirectorMode, currentSpeaker, scenario, ttsEnabled, ttsMode, ttsDelayMs, ttsStreamingMode, addMessage, incrementTurn, saveChatHistory, playAudio, retryWithBackoff, toast, generatedScript, character1Name, character2Name])
+  }, [input, turnCount, maxTurns, sessionId, messages, selectedCharacter, secondCharacter, isDirectorMode, currentSpeaker, scenario, ttsEnabled, ttsMode, ttsDelayMs, ttsStreamingMode, ttsSpeed, addMessage, incrementTurn, saveChatHistory, playAudio, retryWithBackoff, toast, generatedScript, character1Name, character2Name, chatModel])
 
   const handleMessageClick = useCallback((message: { id: string; audio_url?: string }) => {
     if (ttsMode === "on_click" && message.audio_url) {
@@ -716,7 +736,7 @@ ${opponentCharacter?.name}을(를) 분석하거나 해석하지 말고, ${oppone
 
 다음 JSON 형식으로 만 응답해주세요(마크다운 없이 순수 JSON만):
 {
-  "summary": "지난 10턴 동안의 대화 내용을 3줄로 간략히 요약 (다음 대화를 이어가기 위한 줄거리)",
+  "summary": "지난 ${maxTurns}턴 동안의 대화 내용을 3줄로 간략히 요약 (다음 대화를 이어가기 위한 줄거리)",
   "score": 0에서 100 사이의 숫자 (호감도 및 몰입도 점수),
   "comment": "상대방에 대한 솔직한 한줄 평 (캐릭터 말투 유지)"
 }`
@@ -729,10 +749,12 @@ ${opponentCharacter?.name}을(를) 분석하거나 해석하지 말고, ${oppone
       const response = await chatApi.chat({
         messages: messagesForEval,
         character_id: selectedCharacter!.id,
-        session_id: sessionId,
+        session_id: sessionId || undefined,
+        tts_speed: ttsSpeed,
         temperature: 0.7,
         max_tokens: 512,
-        scenario: { opponent: scenario.opponent || "", situation: "" }
+        scenario: { opponent: scenario.opponent || "", situation: "" },
+        model: chatModel || undefined,
       })
 
       if (response.success && response.data?.content) {
@@ -798,8 +820,11 @@ ${opponentCharacter?.name}을(를) 분석하거나 해석하지 말고, ${oppone
         </div>
         <div className="flex items-center gap-4">
           <div className="text-sm">
-            <span className="text-primary font-bold">{turnCount}</span>
+            <span className={`font-bold ${turnCount >= maxTurns ? "text-destructive" : "text-primary"}`}>{turnCount}</span>
             <span className="text-muted-foreground"> / {maxTurns} 턴</span>
+            {isGemini && (
+              <span className="text-[10px] text-amber-500 border border-amber-500/50 px-1 rounded ml-1">Limit</span>
+            )}
             {isDirectorMode && secondCharacter && (
               <span className="text-xs text-muted-foreground ml-1">(1턴 = 2개 대화)</span>
             )}
@@ -833,6 +858,20 @@ ${opponentCharacter?.name}을(를) 분석하거나 해석하지 말고, ${oppone
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {messages.length === 0 && (firstDialogueError || directorFirstDialogueError) && (
+          <div className="flex flex-col items-center justify-center py-8 gap-4">
+            <p className="text-muted-foreground">첫 대사 생성에 실패했습니다.</p>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setFirstDialogueError(false)
+                setDirectorFirstDialogueError(false)
+              }}
+            >
+              재시도
+            </Button>
+          </div>
+        )}
         {messages.map((msg) => {
           const isDirectorUserMsg = isDirectorMode && msg.role === "user" && msg.content.startsWith("[감독 중재]")
           const characterName = msg.emotion || (msg.role === "assistant" && isDirectorMode ? (currentSpeaker === "character1" ? character2Name : character1Name) : null)
@@ -910,16 +949,29 @@ ${opponentCharacter?.name}을(를) 분석하거나 해석하지 말고, ${oppone
         <div className="flex justify-end">
           <button onClick={() => setShowHints(!showHints)} className="px-3 py-1.5 text-xs rounded-full border border-border text-muted-foreground hover:border-primary transition-colors">힌트 보기</button>
         </div>
-        <div className="flex gap-2">
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSend()}
-            placeholder={isDirectorMode && secondCharacter ? "중재나 부추김 메시지를 입력하세요..." : "대사를 입력하세요..."}
-            disabled={turnCount >= maxTurns}
-            className="flex-1 bg-secondary/50"
-          />
-          <Button onClick={handleSend} disabled={!input.trim() || turnCount >= maxTurns} className="bg-primary text-primary-foreground"><Send className="h-4 w-4" /></Button>
+        <div className="flex flex-col gap-2">
+          <div className="flex gap-2">
+            <Input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSend()}
+              placeholder={
+                turnCount >= maxTurns 
+                  ? "대화가 종료되었습니다."
+                  : isDirectorMode && secondCharacter 
+                    ? "중재나 부추김 메시지를 입력하세요..." 
+                    : "대사를 입력하세요..."
+              }
+              disabled={turnCount >= maxTurns}
+              className="flex-1 bg-secondary/50"
+            />
+            <Button onClick={handleSend} disabled={!input.trim() || turnCount >= maxTurns} className="bg-primary text-primary-foreground"><Send className="h-4 w-4" /></Button>
+          </div>
+          {turnCount >= maxTurns && isGemini && (
+            <p className="text-xs text-destructive text-center">
+              Gemini 모델은 20번 대화로 제한됩니다. 20번을 모두 사용했습니다.
+            </p>
+          )}
         </div>
       </div>
 

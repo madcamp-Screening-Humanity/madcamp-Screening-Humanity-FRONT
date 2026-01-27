@@ -1,20 +1,22 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { ArrowLeft, ArrowRight, Loader2, Sparkles, AlertCircle, Play, Pause, RefreshCw } from "lucide-react"
-import { characterApi, ttsApi } from "@/lib/api/client"
+import { characterApi, voiceApi } from "@/lib/api/client"
 import { useToast } from "@/hooks/use-toast"
 import { generateCharacterSpec } from "@/lib/api/gemini"
-import type { Character, CreateCharacterRequest, Voice } from "@/lib/api/types"
+import type { Character, CreateCharacterRequest, VoiceLinkOption } from "@/lib/api/types"
 
 interface CharacterCreationWizardProps {
   onComplete: (character: Character) => void
   onCancel: () => void
   initialData?: Character | null
+  /** dirty(비초기값 존재) 시 true. 모달 닫기/취소 시 confirm용 */
+  onDirtyChange?: (dirty: boolean) => void
 }
 
 /**
@@ -28,6 +30,7 @@ export function CharacterCreationWizard({
   onComplete,
   onCancel,
   initialData,
+  onDirtyChange,
 }: CharacterCreationWizardProps) {
   const { toast } = useToast()
   const [currentStep, setCurrentStep] = useState(1)
@@ -65,8 +68,8 @@ export function CharacterCreationWizard({
   const [retryCount, setRetryCount] = useState(0)
   const MAX_RETRIES = 2 // 초기 생성 외에 2번 더 허용 (총 3회)
 
-  // === Step 3: 음성 ===
-  const [voices, setVoices] = useState<Voice[]>([])
+  // === Step 3: 음성 (VoiceLinkOption: id, name, gpt_weights_path?, sovits_weights_path?) ===
+  const [voices, setVoices] = useState<VoiceLinkOption[]>([])
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>(initialData?.voice_id || "")
   const [loadingVoices, setLoadingVoices] = useState(false)
 
@@ -74,6 +77,46 @@ export function CharacterCreationWizard({
   const [previewText, setPreviewText] = useState("안녕하세요! 반가워요.")
   const [isPlaying, setIsPlaying] = useState(false)
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null)
+
+  // dirty: 필드 중 하나라도 비초기값이면 true (이탈 시 confirm용)
+  const dirty = useMemo(() => {
+    const i = initialData
+    const n = i?.name ?? ""
+    const cat = i?.category ?? ""
+    const sw = ""
+    const d = i?.description ?? ""
+    const w = i?.worldview ?? ""
+    const g = i?.gender ?? ""
+    const sp = i?.species ?? ""
+    const a = i?.age ?? ""
+    const h = i?.height ?? ""
+    const j = i?.job ?? ""
+    const p = i?.personality ?? ""
+    const ap = i?.appearance ?? ""
+    const li = i?.likes?.join(", ") ?? ""
+    const di = i?.dislikes?.join(", ") ?? ""
+    const ss = i?.speech_style ?? ""
+    const t = i?.thoughts ?? ""
+    const f = i?.features ?? ""
+    const ha = i?.habits ?? ""
+    const gu = i?.guidelines ?? ""
+    const vid = i?.voice_id ?? ""
+    return (
+      characterName !== n || category !== cat || sourceWork !== sw || description !== d ||
+      worldview !== w || gender !== g || species !== sp || age !== a || height !== h || job !== j ||
+      personality !== p || appearance !== ap || likes !== li || dislikes !== di ||
+      speechStyle !== ss || thoughts !== t || features !== f || habits !== ha || guidelines !== gu ||
+      selectedVoiceId !== vid
+    )
+  }, [
+    characterName, category, sourceWork, description, worldview, gender, species, age, height, job,
+    personality, appearance, likes, dislikes, speechStyle, thoughts, features, habits, guidelines,
+    selectedVoiceId, initialData,
+  ])
+
+  useEffect(() => {
+    onDirtyChange?.(dirty)
+  }, [dirty, onDirtyChange])
 
   // 음성 목록 로드
   useEffect(() => {
@@ -85,19 +128,45 @@ export function CharacterCreationWizard({
   const loadVoices = useCallback(async () => {
     setLoadingVoices(true)
     try {
-      const response = await ttsApi.listVoices()
-      if (response.success && response.data?.voices) {
-        setVoices(response.data.voices)
-        if (!selectedVoiceId && response.data.voices.length > 0) {
-          setSelectedVoiceId(response.data.voices[0].id)
+      const response = await voiceApi.getVoiceLinkOptions()
+      if (response.success && response.data) {
+        const list = (Array.isArray(response.data) ? response.data : []) as VoiceLinkOption[]
+        setVoices(list)
+        if (!selectedVoiceId && list.length > 0) setSelectedVoiceId(list[0].id)
+        if (list.length === 0) {
+          toast({
+            title: "연결 가능한 음성이 없습니다",
+            description: "내 음성 관리에서 모델을 등록하거나, 시스템에 음성이 등록된 후 이용해 주세요.",
+            variant: "destructive",
+          })
+        }
+      } else {
+        const msg = response.error?.message ?? ""
+        if (msg.includes("401") || msg.includes("인증")) {
+          toast({
+            title: "로그인이 필요합니다",
+            description: "나만의 캐릭터 만들기는 로그인 후 이용해 주세요.",
+            variant: "destructive",
+          })
+        } else {
+          toast({
+            title: "음성 목록을 불러올 수 없습니다",
+            description: response.error?.message ?? "다시 시도해 주세요.",
+            variant: "destructive",
+          })
         }
       }
     } catch (error) {
       console.error("Failed to load voices:", error)
+      toast({
+        title: "음성 목록 로드 실패",
+        description: error instanceof Error ? error.message : "다시 시도해 주세요.",
+        variant: "destructive",
+      })
     } finally {
       setLoadingVoices(false)
     }
-  }, [selectedVoiceId])
+  }, [selectedVoiceId, toast])
 
   // AI 자동 생성 로직
   const runAIGeneration = async (isRetry = false) => {
@@ -223,7 +292,7 @@ export function CharacterCreationWizard({
       if (initialData?.id) {
         response = await characterApi.updateCharacter(initialData.id, request)
       } else {
-        response = await characterApi.createCharacter(request)
+        response = await characterApi.createMyCharacter(request)
       }
 
       if (response.success && response.data) {
@@ -243,14 +312,15 @@ export function CharacterCreationWizard({
     if (currentStep < totalSteps) setCurrentStep(currentStep + 1)
   }
   const handleBack = () => {
+    if (dirty && !window.confirm("저장하지 않고 나가시겠습니까? 입력한 데이터가 사라집니다.")) return
     if (currentStep > 1) setCurrentStep(currentStep - 1)
     else onCancel()
   }
 
   return (
-    <div className="space-y-6 max-h-[80vh] overflow-y-auto pr-2">
+    <div className="space-y-4 max-h-[65vh] flex flex-col">
       {/* Progress Bar */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-2 shrink-0">
         {Array.from({ length: totalSteps }, (_, i) => i + 1).map((step) => (
           <div key={step} className="flex items-center flex-1">
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
@@ -265,7 +335,7 @@ export function CharacterCreationWizard({
       </div>
 
       {/* Steps */}
-      <div className="min-h-[400px]">
+      <div className="flex-1 overflow-y-auto min-h-[300px] pr-2">
         {currentStep === 1 && (
           <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
             <h3 className="text-lg font-semibold">필수 정보 입력</h3>
@@ -314,9 +384,17 @@ export function CharacterCreationWizard({
                    <Label>직업</Label>
                    <Input value={job} onChange={e => setJob(e.target.value)} />
                  </div>
-                 <div>
+                 <div className="col-span-2">
                    <Label>세계관</Label>
-                   <Input value={worldview} onChange={e => setWorldview(e.target.value)} />
+                   <Textarea
+                     value={worldview}
+                     onChange={e => setWorldview(e.target.value)}
+                     placeholder="300자 이상. 시대, 장소, 법칙, 금기, 말투 통일 등 상세히."
+                     minLength={300}
+                     rows={4}
+                     className="resize-y"
+                   />
+                   <p className="text-xs text-muted-foreground mt-1">캐릭터가 사는 세계를 구체적으로 써야 몰입이 유지됩니다. (최소 300자)</p>
                  </div>
                  <div>
                    <Label>성별</Label>
@@ -395,18 +473,29 @@ export function CharacterCreationWizard({
               <div className="flex justify-center py-8"><Loader2 className="animate-spin" /></div>
             ) : (
               <div className="grid grid-cols-1 gap-2 max-h-[400px] overflow-y-auto">
-                {voices.map(voice => (
+                {voices.map(voice => {
+                  const g = voice.gpt_weights_path
+                  const s = voice.sovits_weights_path
+                  const modelLabel = (g && s)
+                    ? `모델: GPT …/${g.split("/").pop()}, SoVITS …/${s.split("/").pop()}`
+                    : g
+                    ? `모델: GPT …/${g.split("/").pop()}`
+                    : s
+                    ? `모델: SoVITS …/${s.split("/").pop()}`
+                    : "모델: (미지정)"
+                  return (
                   <div key={voice.id} 
                     onClick={() => setSelectedVoiceId(voice.id)}
                     className={`p-3 rounded-lg border-2 cursor-pointer transition-all flex justify-between items-center ${selectedVoiceId === voice.id ? "border-primary bg-primary/5" : "border-transparent bg-secondary hover:bg-secondary/80"}`}
                   >
                     <div>
                       <p className="font-medium">{voice.name}</p>
-                      <p className="text-xs text-muted-foreground">{voice.language}</p>
+                      <p className="text-xs text-muted-foreground">{modelLabel}</p>
                     </div>
                     {selectedVoiceId === voice.id && <div className="w-3 h-3 rounded-full bg-primary" />}
                   </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>
@@ -439,7 +528,7 @@ export function CharacterCreationWizard({
       </div>
 
       {/* Navigation */}
-      <div className="flex justify-between pt-4 border-t border-border">
+      <div className="flex justify-between pt-3 border-t border-border shrink-0">
         <Button variant="ghost" onClick={handleBack} disabled={isGenerating}>
           <ArrowLeft className="w-4 h-4 mr-2" /> {currentStep === 1 ? "취소" : "이전"}
         </Button>

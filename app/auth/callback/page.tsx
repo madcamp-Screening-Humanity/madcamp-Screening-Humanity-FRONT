@@ -3,36 +3,46 @@
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAppStore } from "@/lib/store"
+import { settingsApi } from "@/lib/api/client"
 
 export default function AuthCallbackPage() {
     const router = useRouter()
-    const { setIsLoggedIn, setUserName, setIsAdmin } = useAppStore()
+    const {
+        setIsLoggedIn,
+        setUserName,
+        setIsAdmin,
+        setTtsMode,
+        setTtsDelayMs,
+        setTtsStreamingMode,
+        setTtsEnabled,
+        setTtsSpeed,
+    } = useAppStore()
 
     useEffect(() => {
         // 쿠키에 토큰이 설정되었는지 확인
-        // Backend에서 HttpOnly Cookie로 설정했으므로, 
+        // Backend에서 HttpOnly Cookie로 설정했으므로,
         // 쿠키가 있다는 것은 로그인이 성공했다는 의미
         const checkAuth = async () => {
             const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-            
+
             // AbortController로 타임아웃 구현 (15초로 증가 - 느린 네트워크 대응)
             const controller = new AbortController()
             const timeoutId = setTimeout(() => controller.abort(), 15000) // 5초 → 15초로 증가
-            
+
             try {
                 console.log("인증 확인 시작:", `${API_BASE_URL}/api/auth/me`)
-                
+
                 // 사용자 정보 가져오기 (타임아웃 적용)
                 const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
                     method: 'GET',
                     credentials: 'include',
                     signal: controller.signal,
                 })
-                
+
                 clearTimeout(timeoutId)
-                
+
                 console.log("인증 응답 상태:", response.status, response.statusText)
-                
+
                 if (response.ok) {
                     const userData = await response.json()
                     console.log("사용자 정보:", userData)
@@ -41,6 +51,18 @@ export default function AuthCallbackPage() {
                     if (userData.username) {
                         setUserName(userData.username)
                     }
+                    // 로그인 시 DB 설정 동기화: GET /api/users/me/settings → 있으면 store 덮어쓰기
+                    try {
+                        const res = await settingsApi.getMySettings()
+                        if (res.success && res.data && typeof res.data === 'object' && Object.keys(res.data).length > 0) {
+                            const d = res.data
+                            if (d.tts_mode != null) setTtsMode(d.tts_mode as "realtime" | "delayed" | "on_click")
+                            if (typeof d.tts_delay_ms === 'number') setTtsDelayMs(d.tts_delay_ms)
+                            if (typeof d.tts_streaming_mode === 'number') setTtsStreamingMode(d.tts_streaming_mode)
+                            if (typeof d.tts_enabled === 'boolean') setTtsEnabled(d.tts_enabled)
+                            if (typeof d.tts_speed === 'number') setTtsSpeed(d.tts_speed)
+                        }
+                    } catch (_) { /* 무시 */ }
                 } else {
                     // 인증 실패 시에도 로그인 상태는 설정 (쿠키가 있으므로)
                     console.warn("인증 실패하지만 쿠키가 있을 수 있으므로 로그인 상태로 설정")
@@ -81,7 +103,7 @@ export default function AuthCallbackPage() {
         }
 
         checkAuth()
-    }, [router, setIsLoggedIn, setUserName])
+    }, [router, setIsLoggedIn, setUserName, setIsAdmin, setTtsMode, setTtsDelayMs, setTtsStreamingMode, setTtsEnabled, setTtsSpeed])
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-background">
