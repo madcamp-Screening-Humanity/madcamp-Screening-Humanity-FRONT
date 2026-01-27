@@ -101,7 +101,6 @@ export function ChatRoom() {
     ttsEnabled,
     sessionId,
     setSessionId,
-    maxTurns,
     generatedScript,
   } = useAppStore()
   const { toast } = useToast()
@@ -117,6 +116,12 @@ export function ChatRoom() {
   const [currentSpeaker, setCurrentSpeaker] = useState<"character1" | "character2">("character1")
   const [lastProcessedMessageId, setLastProcessedMessageId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // 턴 제한 및 평가 관련 상태 (사용자 요청: 10턴)
+  const maxTurns = 10
+  const [evaluationResult, setEvaluationResult] = useState<{ summary: string; score: number; comment: string } | null>(null)
+  const [showEvaluationModal, setShowEvaluationModal] = useState(false)
+  const [isEvaluating, setIsEvaluating] = useState(false)
 
   const isVisible = step === "chat"
   const isDirectorMode = gameMode === "director"
@@ -687,16 +692,90 @@ ${opponentCharacter?.name}을(를) 분석하거나 해석하지 말고, ${oppone
     setShowHints(false)
   }
 
-  // 감독 중재(수정하기) 버튼 및 기능 제거: 사용자가 "이미 뱉은 대사는 주워 담을 수 없다"며 삭제 요청 (2026-01-27)
-  /*
-  const handleEditMessage = (messageId: string) => {
-    ...
+  // 평가하기 핸들러
+  const handleEvaluate = async () => {
+    if (isEvaluating) return
+
+    if (!selectedCharacter) {
+      toast({
+        title: "오류 발생",
+        description: "캐릭터 정보를 찾을 수 없습니다.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    setIsEvaluating(true)
+
+    try {
+      const evalSystemPrompt = `
+당신은 ${selectedCharacter.name} 본인입니다.
+지금까지의 대화 내용을 바탕으로 상대방(${isDirectorMode ? '감독' : (scenario.opponent || '사용자')})과의 대화를 평가해주세요.
+제3자나 AI가 아닌, **${selectedCharacter.name} 캐릭터 본인의 시점과 말투**로 평가해야 합니다.
+
+다음 JSON 형식으로 만 응답해주세요(마크다운 없이 순수 JSON만):
+{
+  "summary": "지난 10턴 동안의 대화 내용을 3줄로 간략히 요약 (다음 대화를 이어가기 위한 줄거리)",
+  "score": 0에서 100 사이의 숫자 (호감도 및 몰입도 점수),
+  "comment": "상대방에 대한 솔직한 한줄 평 (캐릭터 말투 유지)"
+}`
+
+      const messagesForEval = [
+        ...messages.map(m => ({ role: m.role, content: m.content })),
+        { role: "system" as const, content: evalSystemPrompt }
+      ]
+
+      const response = await chatApi.chat({
+        messages: messagesForEval,
+        character_id: selectedCharacter!.id,
+        session_id: sessionId,
+        temperature: 0.7,
+        max_tokens: 512,
+        scenario: { opponent: scenario.opponent || "", situation: "" }
+      })
+
+      if (response.success && response.data?.content) {
+        let jsonStr = response.data.content
+        jsonStr = jsonStr.replace(/```json/g, "").replace(/```/g, "").trim()
+
+        try {
+          const result = JSON.parse(jsonStr)
+          setEvaluationResult(result)
+          setShowEndModal(false)
+          setShowEvaluationModal(true)
+        } catch (e) {
+          console.error("JSON 파싱 실패:", e)
+          setEvaluationResult({
+            summary: "요약 정보를 불러오지 못했습니다.",
+            score: 50,
+            comment: response.data.content
+          })
+          setShowEndModal(false)
+          setShowEvaluationModal(true)
+        }
+      }
+    } catch (error) {
+      console.error("평가 생성 실패:", error)
+      toast({
+        title: "평가 실패",
+        description: "평가를 받아오는 중 오류가 발생했습니다.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsEvaluating(false)
+    }
   }
 
-  const handleRegenerateWithNote = useCallback(async () => {
-    ...
-  }, [...])
-  */
+  // 이어하기 핸들러 (UI용)
+  const handleContinueTalk = () => {
+    if (!evaluationResult) return
+    setShowEvaluationModal(false)
+    setEvaluationResult(null)
+    useAppStore.getState().setTurnCount(0)
+    toast({ title: "이어하기", description: "대화가 계속됩니다. (컨텍스트 압축: 미구현)" })
+  }
+
+  // 중복 핸들러 제거됨
 
   const handleContinue = () => setShowEndModal(false)
   const handleNewPlay = () => { setShowEndModal(false); saveChatHistory(); resetGame(); }
@@ -739,7 +818,7 @@ ${opponentCharacter?.name}을(를) 분석하거나 해석하지 말고, ${oppone
             <Suspense fallback={null}><AvatarScene isUser={false} /></Suspense>
           </Canvas>
           <div className="absolute bottom-2 left-2 px-2 py-1 bg-card/80 backdrop-blur-sm rounded text-xs">
-            {isDirectorMode && secondCharacter ? character1Name : `AI (${scenario.opponent})`}
+            {isDirectorMode && secondCharacter ? character1Name : scenario.opponent}
           </div>
         </div>
         <div className="relative bg-secondary/20">
@@ -845,18 +924,83 @@ ${opponentCharacter?.name}을(를) 분석하거나 해석하지 말고, ${oppone
 
       {showEndModal && (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-card border border-border rounded-2xl p-6 max-w-sm w-full space-y-6">
-            <h2 className="text-2xl font-bold text-center">The End</h2>
-            <div className="p-4 bg-secondary/50 rounded-xl space-y-2">
-              <div className="flex justify-between text-sm"><span className="text-muted-foreground">총 턴 수</span><span>{turnCount}턴</span></div>
-              <div className="flex justify-between text-sm"><span className="text-muted-foreground">상황</span><span className="truncate max-w-[180px]">{scenario.situation}</span></div>
-            </div>
-            <div className="flex flex-col gap-3">
-              <Button
-                onClick={handleQuit}
-                className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-sm w-full space-y-6 relative">
+            {turnCount < maxTurns && (
+              <button
+                onClick={() => setShowEndModal(false)}
+                className="absolute top-4 right-4 text-muted-foreground hover:text-foreground p-1"
               >
-                연극 종료하기
+                <X className="h-5 w-5" />
+              </button>
+            )}
+
+            <h2 className="text-2xl font-bold text-center">
+              {turnCount >= maxTurns ? "대화 종료" : "연극 종료"}
+            </h2>
+            <div className="p-4 bg-secondary/50 rounded-xl space-y-2">
+              <p className="text-center text-muted-foreground whitespace-pre-wrap">
+                {turnCount >= maxTurns
+                  ? `${maxTurns}턴의 대화가 모두 끝났습니다.\n캐릭터에게 대화에 대한 평가를 받아보세요!`
+                  : "현재 연극을 종료하고 평가를 받으시겠습니까?"}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={handleNewPlay}>
+                <Home className="mr-2 h-4 w-4" />
+                처음으로
+              </Button>
+              <Button
+                className="flex-1 bg-primary text-primary-foreground"
+                onClick={handleEvaluate}
+                disabled={isEvaluating}
+              >
+                {isEvaluating ? "평가 중..." : "평가받기"}
+                {!isEvaluating && <Lightbulb className="ml-2 h-4 w-4" />}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 평가 결과 모달 */}
+      {showEvaluationModal && evaluationResult && (
+        <div className="fixed inset-0 bg-background/95 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-md w-full space-y-6 shadow-2xl animate-in fade-in zoom-in duration-300">
+            <div className="text-center space-y-2">
+              <h2 className="text-2xl font-bold text-primary">대화 평가 결과</h2>
+              <p className="text-sm text-muted-foreground">By. {selectedCharacter?.name}</p>
+            </div>
+
+            <div className="space-y-4">
+              {/* 점수 */}
+              <div className="flex flex-col items-center justify-center p-4 bg-secondary/30 rounded-xl">
+                <span className="text-sm text-muted-foreground mb-1">호감도 & 몰입도</span>
+                <span className="text-5xl font-black text-primary">{evaluationResult.score}</span>
+                <span className="text-sm text-muted-foreground mt-1">/ 100점</span>
+              </div>
+
+              {/* 한줄 평 */}
+              <div className="relative p-4 bg-primary/10 rounded-xl">
+                <div className="absolute top-0 left-0 w-1 h-full bg-primary rounded-l-xl"></div>
+                <p className="font-medium text-foreground italic">"{evaluationResult.comment}"</p>
+              </div>
+
+              {/* 요약 */}
+              <div className="space-y-1">
+                <span className="text-xs font-semibold text-muted-foreground">대화 요약</span>
+                <p className="text-sm text-foreground/80 leading-relaxed bg-secondary/20 p-3 rounded-lg">
+                  {evaluationResult.summary}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" className="flex-1" onClick={handleNewPlay}>
+                종료하기
+              </Button>
+              <Button className="flex-1" onClick={handleContinueTalk}>
+                이어하기
+                <RotateCcw className="ml-2 h-4 w-4" />
               </Button>
             </div>
           </div>
