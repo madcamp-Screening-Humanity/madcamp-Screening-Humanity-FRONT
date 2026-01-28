@@ -5,14 +5,14 @@ import React from "react"
 import { useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { useAppStore } from "@/lib/store"
-import { Upload, X, Camera, User, ArrowLeft, Loader2 } from "lucide-react"
-import { generationApi } from "@/lib/api/client"
+import { Upload, X, Camera, User, ArrowLeft } from "lucide-react"
+
 
 export function AvatarUpload() {
   const { step, setStep, setUploadedImage, setAvatarUrl, setGenerationJobId } = useAppStore()
   const [dragActive, setDragActive] = useState(false)
   const [preview, setPreview] = useState<string | null>(null)
-  const [isUploading, setIsUploading] = useState(false)
+
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
   const isVisible = step === "avatar-upload"
@@ -58,23 +58,10 @@ export function AvatarUpload() {
 
   const handleContinue = async () => {
     if (!selectedFile) return
-
-    try {
-      setIsUploading(true)
-      // Call Generation API
-      const response = await generationApi.generateCharacter(selectedFile)
-
-      if (response.success && response.data) {
-        setGenerationJobId(response.data.job_id)
-        setStep("avatar-preview")
-      } else {
-        console.error("Failed to start generation:", response.error)
-        // TODO: Show error toast
-      }
-    } catch (error) {
-      console.error("Error starting generation:", error)
-    } finally {
-      setIsUploading(false)
+    // 2D 이미지로 바로 사용
+    if (preview) {
+      setAvatarUrl(preview)
+      setStep("scenario-setup")
     }
   }
 
@@ -112,10 +99,10 @@ export function AvatarUpload() {
         <div className="max-w-md w-full space-y-8 text-center">
           <div>
             <h1 className="text-3xl font-bold text-foreground">
-              아바타 만들기
+              프로필 사진 설정
             </h1>
             <p className="text-muted-foreground mt-2">
-              당신의 얼굴로 3D 아바타를 만들어보세요
+              대화에 사용할 프로필 사진을 올려주세요
             </p>
           </div>
 
@@ -139,8 +126,7 @@ export function AvatarUpload() {
                 onClick={handleContinue}
                 className="w-full py-6 text-lg bg-primary text-primary-foreground hover:bg-primary/90"
               >
-                3D 변환하기
-                {isUploading && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+                이 사진 사용하기
               </Button>
             </div>
           ) : (
@@ -150,8 +136,8 @@ export function AvatarUpload() {
               onDragOver={handleDrag}
               onDrop={handleDrop}
               className={`relative border-2 border-dashed rounded-2xl p-12 transition-all ${dragActive
-                  ? "border-primary bg-primary/10"
-                  : "border-border bg-secondary/30 hover:border-muted-foreground"
+                ? "border-primary bg-primary/10"
+                : "border-border bg-secondary/30 hover:border-muted-foreground"
                 }`}
             >
               <input

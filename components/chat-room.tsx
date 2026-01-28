@@ -1,8 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, Suspense, useCallback } from "react"
-import { Canvas } from "@react-three/fiber"
-import { OrbitControls, Environment, ContactShadows } from "@react-three/drei"
+
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useAppStore } from "@/lib/store"
@@ -24,62 +23,7 @@ import {
   Loader2,
 } from "lucide-react"
 
-function SimpleAvatar({ isUser = false }: { isUser?: boolean }) {
-  const color = isUser ? "#3b82f6" : "#ef4444"
 
-  return (
-    <group>
-      <mesh position={[0, 1.5, 0]}>
-        <sphereGeometry args={[0.4, 32, 32]} />
-        <meshStandardMaterial color="#e8d4c4" />
-      </mesh>
-      <mesh position={[0, 0.7, 0]}>
-        <capsuleGeometry args={[0.35, 0.6, 8, 16]} />
-        <meshStandardMaterial color={color} />
-      </mesh>
-      <mesh position={[-0.5, 0.8, 0]} rotation={[0, 0, 0.3]}>
-        <capsuleGeometry args={[0.1, 0.4, 8, 16]} />
-        <meshStandardMaterial color={color} />
-      </mesh>
-      <mesh position={[0.5, 0.8, 0]} rotation={[0, 0, -0.3]}>
-        <capsuleGeometry args={[0.1, 0.4, 8, 16]} />
-        <meshStandardMaterial color={color} />
-      </mesh>
-      <mesh position={[-0.12, 1.55, 0.35]}>
-        <sphereGeometry args={[0.06, 16, 16]} />
-        <meshStandardMaterial color="#1a1a1a" />
-      </mesh>
-      <mesh position={[0.12, 1.55, 0.35]}>
-        <sphereGeometry args={[0.06, 16, 16]} />
-        <meshStandardMaterial color="#1a1a1a" />
-      </mesh>
-    </group>
-  )
-}
-
-function AvatarScene({ isUser = false }: { isUser?: boolean }) {
-  return (
-    <>
-      <ambientLight intensity={0.5} />
-      <directionalLight position={[5, 5, 5]} intensity={1} />
-      <SimpleAvatar isUser={isUser} />
-      <ContactShadows
-        position={[0, 0, 0]}
-        opacity={0.3}
-        scale={3}
-        blur={2}
-        far={4}
-      />
-      <OrbitControls
-        enableZoom={false}
-        enablePan={false}
-        minPolarAngle={Math.PI / 3}
-        maxPolarAngle={Math.PI / 2}
-      />
-      <Environment preset="studio" />
-    </>
-  )
-}
 
 export function ChatRoom() {
   const {
@@ -106,6 +50,7 @@ export function ChatRoom() {
     setSessionId,
     generatedScript,
     chatModel,
+    avatarUrl,
   } = useAppStore()
   const { toast } = useToast()
   const { play: playAudio, isPlaying, stop: stopAudio } = useTTS()
@@ -169,15 +114,15 @@ export function ChatRoom() {
       if (selectedCharacter && selectedCharacter.voice_id) {
         console.log(`[TTS] Preparing weights for ${selectedCharacter.name} (${selectedCharacter.voice_id})`)
         ttsApi.prepareTTS(selectedCharacter.voice_id).catch((err) => {
-           console.error(`[TTS] Failed to prepare weights for ${selectedCharacter.name}:`, err)
+          console.error(`[TTS] Failed to prepare weights for ${selectedCharacter.name}:`, err)
         })
       }
-      
+
       // 2. 두 번째 캐릭터 (감독 모드의 상대방)
       if (secondCharacter && secondCharacter.voice_id) {
         console.log(`[TTS] Preparing weights for ${secondCharacter.name} (${secondCharacter.voice_id})`)
         ttsApi.prepareTTS(secondCharacter.voice_id).catch((err) => {
-           console.error(`[TTS] Failed to prepare weights for ${secondCharacter.name}:`, err)
+          console.error(`[TTS] Failed to prepare weights for ${secondCharacter.name}:`, err)
         })
       }
     }
@@ -522,7 +467,7 @@ ${nextOpponent?.name}을(를) 분석하거나 해석하지 말고, ${nextOpponen
   const handleTTS = useCallback((url: string | undefined) => {
     if (!url || !ttsEnabled) return
     const audioUrl = url.startsWith("http") ? url : `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}${url}`
-    
+
     if (ttsMode === "realtime") {
       toast({ description: "🔊 음성이 재생됩니다." })
       playAudio(audioUrl)
@@ -700,20 +645,20 @@ ${opponentCharacter?.name}을(를) 분석하거나 해석하지 말고, ${oppone
 
               // TTS 생성 (스트리밍 완료 후)
               if (ttsEnabled && fullText.trim()) {
-                 const targetCharacter = selectedCharacter
-                 if (targetCharacter?.voice_id) {
-                     toast({ description: "🔊 음성을 생성 중입니다..." })
-                     ttsApi.generateSpeech({
-                         text: fullText.trim(),
-                         voice_id: targetCharacter.voice_id,
-                         speed: ttsSpeed,
-                         streaming_mode: ttsStreamingMode,
-                     }).then(res => {
-                         if (res.success && res.data?.audio_url) {
-                             handleTTS(res.data.audio_url)
-                         }
-                     }).catch(err => console.error(err))
-                 }
+                const targetCharacter = selectedCharacter
+                if (targetCharacter?.voice_id) {
+                  toast({ description: "🔊 음성을 생성 중입니다..." })
+                  ttsApi.generateSpeech({
+                    text: fullText.trim(),
+                    voice_id: targetCharacter.voice_id,
+                    speed: ttsSpeed,
+                    streaming_mode: ttsStreamingMode,
+                  }).then(res => {
+                    if (res.success && res.data?.audio_url) {
+                      handleTTS(res.data.audio_url)
+                    }
+                  }).catch(err => console.error(err))
+                }
               }
 
               setStreamingContent("")
@@ -1027,21 +972,65 @@ ${opponentCharacter?.name}을(를) 분석하거나 해석하지 말고, ${oppone
         </div>
       </header>
 
-      <div className="grid grid-cols-2 h-64 border-b border-border">
-        <div className="relative border-r border-border bg-secondary/20">
-          <Canvas camera={{ position: [0, 1, 2.5], fov: 50 }}>
-            <Suspense fallback={null}><AvatarScene isUser={false} /></Suspense>
-          </Canvas>
-          <div className="absolute bottom-2 left-2 px-2 py-1 bg-card/80 backdrop-blur-sm rounded text-xs">
-            {isDirectorMode && secondCharacter ? character1Name : scenario.opponent}
+      <div className="grid grid-cols-2 h-64 border-b border-border bg-secondary/20">
+        <div className="relative border-r border-border flex items-center justify-center p-4">
+          <div className="text-center">
+            <div className="w-48 h-48 rounded-full border-4 border-primary mx-auto mb-3 overflow-hidden shadow-lg bg-card">
+              {selectedCharacter?.image_url ? (
+                <img
+                  src={selectedCharacter.image_url}
+                  alt={isDirectorMode && secondCharacter ? character1Name : scenario.opponent}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-6xl">
+                  🎭
+                </div>
+              )}
+            </div>
+            <div className="font-bold text-lg text-foreground bg-card/80 px-4 py-1 rounded-full inline-block shadow-sm backdrop-blur-sm">
+              {isDirectorMode && secondCharacter ? character1Name : scenario.opponent}
+            </div>
           </div>
         </div>
-        <div className="relative bg-secondary/20">
-          <Canvas camera={{ position: [0, 1, 2.5], fov: 50 }}>
-            <Suspense fallback={null}><AvatarScene isUser={!isDirectorMode} /></Suspense>
-          </Canvas>
-          <div className="absolute bottom-2 right-2 px-2 py-1 bg-card/80 backdrop-blur-sm rounded text-xs">
-            {isDirectorMode && secondCharacter ? character2Name : myName}
+        <div className="relative flex items-center justify-center p-4">
+          <div className="text-center">
+            <div className="w-48 h-48 rounded-full border-4 border-blue-500 mx-auto mb-3 overflow-hidden shadow-lg bg-card">
+              {isDirectorMode && secondCharacter ? (
+                secondCharacter.image_url ? (
+                  <img
+                    src={secondCharacter.image_url}
+                    alt={character2Name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-6xl">
+                    👤
+                  </div>
+                )
+              ) : (
+                avatarUrl ? (
+                  <img
+                    src={avatarUrl === "custom-avatar" || avatarUrl === "default"
+                      ? "/placeholder-user.jpg" /* fallback for default string values if actual URL not present */
+                      : (avatarUrl || "/placeholder-user.jpg")}
+                    alt={myName}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      // Fallback if image fails to load
+                      e.currentTarget.src = "/placeholder-user.jpg"
+                    }}
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-6xl">
+                    👤
+                  </div>
+                )
+              )}
+            </div>
+            <div className="font-bold text-lg text-foreground bg-card/80 px-4 py-1 rounded-full inline-block shadow-sm backdrop-blur-sm">
+              {isDirectorMode && secondCharacter ? character2Name : myName}
+            </div>
           </div>
         </div>
       </div>

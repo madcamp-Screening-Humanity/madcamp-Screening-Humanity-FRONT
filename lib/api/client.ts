@@ -239,11 +239,11 @@ export const chatApi = {
                     if (line.startsWith('data: ')) {
                         try {
                             const data = JSON.parse(line.slice(6));
-                            
+
                             if (data.error) {
                                 throw new Error(data.error);
                             }
-                            
+
                             if (data.done) {
                                 // 완료 시 전체 텍스트와 세션 ID 반환
                                 sessionId = data.session_id;
@@ -503,152 +503,11 @@ export const voiceApi = {
     },
 };
 
-// ============ Generation API ============
-export const generationApi = {
-    /**
-     * 3D 캐릭터 생성 시작
-     */
-    async generateCharacter(
-        image: File,
-        styleTransfer: boolean = true
-    ): Promise<ApiResponse<GenerationResponse>> {
-        const formData = new FormData();
-        formData.append('image', image);
-        formData.append('style_transfer', String(styleTransfer));
 
-        const response = await fetch(`${API_V1}/generate`, {
-            method: 'POST',
-            credentials: 'include',  // 쿠키 자동 전달
-            body: formData,
-        });
-        return handleResponse<GenerationResponse>(response);
-    },
 
-    /**
-     * 생성 상태 조회
-     */
-    async getStatus(jobId: string): Promise<ApiResponse<GenerationStatus>> {
-        const response = await fetch(`${API_V1}/generate/status/${jobId}`);
-        return handleResponse<GenerationStatus>(response);
-    },
 
-    /**
-     * 생성 완료까지 폴링 (주기적으로 상태 확인)
-     */
-    async pollUntilComplete(
-        jobId: string,
-        onProgress?: (status: GenerationStatus) => void,
-        intervalMs: number = 2000
-    ): Promise<ApiResponse<GenerationStatus>> {
-        return new Promise((resolve) => {
-            const poll = async () => {
-                const result = await this.getStatus(jobId);
 
-                if (result.success && result.data) {
-                    onProgress?.(result.data);
 
-                    if (result.data.status === 'completed' || result.data.status === 'failed') {
-                        resolve(result);
-                        return;
-                    }
-                }
-
-                setTimeout(poll, intervalMs);
-            };
-
-            poll();
-        });
-    },
-
-    /**
-     * 결과 URL을 절대 경로로 변환
-     */
-    getResultUrl(resultPath: string): string {
-        if (resultPath.startsWith('http')) return resultPath;
-        return `${API_BASE_URL}${resultPath}`;
-    },
-};
-
-// ============ Style Transfer API ============
-export const styleApi = {
-    /**
-     * 스타일 변환 시작
-     */
-    async transformStyle(
-        image: File,
-        stylePreset: string = 'anime',
-        strength: number = 0.8
-    ): Promise<ApiResponse<StyleTransferResponse>> {
-        const formData = new FormData();
-        formData.append('image', image);
-        formData.append('style_preset', stylePreset);
-        formData.append('strength', String(strength));
-
-        const response = await fetch(`${API_V1}/style/transform`, {
-            method: 'POST',
-            credentials: 'include',  // 쿠키 자동 전달
-            body: formData,
-        });
-        return handleResponse<StyleTransferResponse>(response);
-    },
-
-    /**
-     * 변환 상태 조회
-     */
-    async getStatus(jobId: string): Promise<ApiResponse<StyleTransferStatus>> {
-        const response = await fetch(`${API_V1}/style/status/${jobId}`);
-        return handleResponse<StyleTransferStatus>(response);
-    },
-
-    /**
-     * 변환 완료까지 폴링
-     */
-    async pollUntilComplete(
-        jobId: string,
-        onProgress?: (status: StyleTransferStatus) => void,
-        intervalMs: number = 2000
-    ): Promise<ApiResponse<StyleTransferStatus>> {
-        return new Promise((resolve) => {
-            const poll = async () => {
-                const result = await this.getStatus(jobId);
-
-                if (result.success && result.data) {
-                    onProgress?.(result.data);
-
-                    if (result.data.status === 'completed' || result.data.status === 'failed') {
-                        resolve(result);
-                        return;
-                    }
-                }
-
-                setTimeout(poll, intervalMs);
-            };
-
-            poll();
-        });
-    },
-};
-
-// ============ Animation API ============
-export const animationApi = {
-    /**
-     * 사용 가능한 애니메이션 목록 조회
-     */
-    async listAnimations(): Promise<ApiResponse<AnimationsResponse>> {
-        const response = await fetch(`${API_V1}/animations`, {
-            credentials: 'include',  // 쿠키 자동 전달
-        });
-        return handleResponse<AnimationsResponse>(response);
-    },
-
-    /**
-     * 애니메이션 URL을 절대 경로로 변환
-     */
-    getAnimationUrl(animationPath: string): string {
-        if (animationPath.startsWith('http')) return animationPath;
-        return `${API_BASE_URL}${animationPath}`;
-    },
-};
 
 // ============ Story API ============
 export const storyApi = {
@@ -961,9 +820,7 @@ export const api = {
     chat: chatApi,
     tts: ttsApi,
     voice: voiceApi,
-    generation: generationApi,
-    style: styleApi,
-    animation: animationApi,
+
     story: storyApi,
     system: systemApi,
     character: characterApi,

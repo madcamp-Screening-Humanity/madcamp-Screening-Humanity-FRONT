@@ -4,7 +4,7 @@ import { LandingPage } from "@/components/landing-page"
 import { ModeSelectModal } from "@/components/mode-select-modal"
 import { CharacterSelectModal } from "@/components/character-select-modal"
 import { AvatarUpload } from "@/components/avatar-upload"
-import { AvatarPreview } from "@/components/avatar-preview"
+
 import { ScenarioSetup } from "@/components/scenario-setup"
 import { ScriptPreview } from "@/components/script-preview"
 import { LoadingScreen } from "@/components/loading-screen"
@@ -28,20 +28,17 @@ export default function Home() {
       {/* Avatar Upload */}
       <AvatarUpload />
 
-      {/* Avatar Preview (3D) */}
-      <AvatarPreview />
-
       {/* Scenario Setup */}
-      <ScenarioSetup />
+      {step === "scenario-setup" && isLoggedIn && <ScenarioSetup />}
 
       {/* Script Preview - AI generated situation script */}
-      <ScriptPreview />
+      {step === "script-preview" && isLoggedIn && <ScriptPreview />}
 
       {/* Loading Screen */}
-      <LoadingScreen />
+      {step === "loading" && isLoggedIn && <LoadingScreen />}
 
       {/* Chat Room */}
-      <ChatRoom />
-    </main>
+      {step === "chat" && isLoggedIn && <ChatRoom />}
+    </main >
   )
 }
