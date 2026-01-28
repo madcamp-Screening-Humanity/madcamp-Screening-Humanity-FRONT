@@ -46,7 +46,6 @@ export const CHARACTER_LAYOUT = {
   // 카드 레이아웃
   CARD: {
     aspectRatio: "aspect-square", // 카드 비율
-    showSampleDialogue: true,      // 샘플 대화 표시 여부
   },
 }
 

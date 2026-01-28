@@ -28,8 +28,6 @@ export interface ChatHistory {
   scenario: {
     opponent: string
     situation: string
-    summary?: string
-    background?: string
   }
   messages: Message[]
   turnCount: number
@@ -37,6 +35,7 @@ export interface ChatHistory {
   updatedAt: Date
   generatedScript: string
   displayName: string
+  chatModel?: "gemini-2.5-flash" | "glm-4.7-flash"
 }
 
 export interface Character {
@@ -47,7 +46,6 @@ export interface Character {
   voice_id?: string
   category?: string
   tags?: string[]
-  sample_dialogue?: string
   image_url?: string
   is_preset: boolean
   user_id?: string
@@ -59,12 +57,16 @@ interface AppState {
   setStep: (step: AppStep) => void
   isLoggedIn: boolean
   setIsLoggedIn: (value: boolean) => void
+  isAdmin: boolean
+  setIsAdmin: (value: boolean) => void
   userName: string
   setUserName: (name: string) => void
   displayName: string
   setDisplayName: (name: string) => void
   gameMode: GameMode | null
   setGameMode: (mode: GameMode) => void
+  chatModel: "gemini-2.5-flash" | "glm-4.7-flash" | null
+  setChatModel: (model: "gemini-2.5-flash" | "glm-4.7-flash" | null) => void
   avatarUrl: string | null
   setAvatarUrl: (url: string | null) => void
   uploadedImage: string | null
@@ -72,10 +74,9 @@ interface AppState {
   scenario: {
     opponent: string
     situation: string
-    summary?: string
     background?: string
   }
-  setScenario: (scenario: { opponent: string; situation: string; summary?: string; background?: string }) => void
+  setScenario: (scenario: { opponent: string; situation: string; background?: string }) => void
   generatedScript: string
   setGeneratedScript: (script: string) => void
   messages: Message[]
@@ -97,7 +98,7 @@ interface AppState {
   setGenerationJobId: (id: string | null) => void
   selectedCharacter: Character | null
   setSelectedCharacter: (character: Character | null) => void
-  secondCharacter: Character | null  // 감독 모드용 두 번째 캐릭터
+  secondCharacter: Character | null
   setSecondCharacter: (character: Character | null) => void
   // TTS 설정
   ttsMode: "realtime" | "delayed" | "on_click"
@@ -108,6 +109,8 @@ interface AppState {
   setTtsStreamingMode: (mode: number) => void
   ttsEnabled: boolean
   setTtsEnabled: (enabled: boolean) => void
+  ttsSpeed: number
+  setTtsSpeed: (speed: number) => void
   sessionId: string | null
   setSessionId: (id: string | null) => void
   // 턴 제한 설정
@@ -122,12 +125,16 @@ export const useAppStore = create<AppState>()(
       setStep: (step) => set({ step }),
       isLoggedIn: false,
       setIsLoggedIn: (value) => set({ isLoggedIn: value }),
+      isAdmin: false,
+      setIsAdmin: (value) => set({ isAdmin: value }),
       userName: "",
       setUserName: (name) => set({ userName: name }),
       displayName: "",
       setDisplayName: (name) => set({ displayName: name }),
       gameMode: null,
       setGameMode: (mode) => set({ gameMode: mode }),
+      chatModel: null,
+      setChatModel: (model) => set({ chatModel: model }),
       avatarUrl: null,
       setAvatarUrl: (url) => set({ avatarUrl: url }),
       uploadedImage: null,
@@ -135,6 +142,7 @@ export const useAppStore = create<AppState>()(
       scenario: {
         opponent: "",
         situation: "",
+        background: "",
       },
       setScenario: (scenario) => set({ scenario }),
       generatedScript: "",
@@ -159,7 +167,7 @@ export const useAppStore = create<AppState>()(
       setCurrentChatId: (id) => set({ currentChatId: id }),
       saveChatHistory: () => {
         const state = get()
-        const { scenario, messages, turnCount, currentChatId, chatHistories, generatedScript, displayName } = state
+        const { scenario, messages, turnCount, currentChatId, chatHistories, generatedScript, displayName, chatModel } = state
 
         if (messages.length === 0) return
 
@@ -169,7 +177,7 @@ export const useAppStore = create<AppState>()(
           // Update existing
           const updated = chatHistories.map(h =>
             h.id === currentChatId
-              ? { ...h, messages, turnCount, updatedAt: now, generatedScript, displayName }
+              ? { ...h, messages, turnCount, updatedAt: now, generatedScript, displayName, chatModel: chatModel || undefined }
               : h
           )
           set({ chatHistories: updated })
@@ -184,6 +192,7 @@ export const useAppStore = create<AppState>()(
             updatedAt: now,
             generatedScript,
             displayName,
+            chatModel: chatModel || undefined,
           }
           set({
             chatHistories: [newHistory, ...chatHistories],
@@ -202,7 +211,8 @@ export const useAppStore = create<AppState>()(
             currentChatId: id,
             generatedScript: history.generatedScript,
             displayName: history.displayName || state.userName,
-            step: "chat"
+            step: "chat",
+            chatModel: history.chatModel || "glm-4.7-flash",
           })
         }
       },
@@ -215,9 +225,10 @@ export const useAppStore = create<AppState>()(
         set({
           step: "mode-select",
           gameMode: null,
+          chatModel: null,
           avatarUrl: null,
           uploadedImage: null,
-          scenario: { opponent: "", situation: "" },
+          scenario: { opponent: "", situation: "", background: "" },
           messages: [],
           turnCount: 0,
           currentChatId: null,
@@ -229,9 +240,10 @@ export const useAppStore = create<AppState>()(
         set({
           step: "landing",
           gameMode: null,
+          chatModel: null,
           avatarUrl: null,
           uploadedImage: null,
-          scenario: { opponent: "", situation: "" },
+          scenario: { opponent: "", situation: "", background: "" },
           messages: [],
           turnCount: 0,
           currentChatId: null,
@@ -252,6 +264,8 @@ export const useAppStore = create<AppState>()(
       setTtsStreamingMode: (mode) => set({ ttsStreamingMode: mode }),
       ttsEnabled: true,
       setTtsEnabled: (enabled) => set({ ttsEnabled: enabled }),
+      ttsSpeed: 1.0,
+      setTtsSpeed: (speed) => set({ ttsSpeed: speed }),
       sessionId: null,
       setSessionId: (id) => set({ sessionId: id }),
       // 턴 제한 설정
@@ -267,6 +281,12 @@ export const useAppStore = create<AppState>()(
         userName: state.userName,
         displayName: state.displayName,
         isLoggedIn: state.isLoggedIn,
+        isAdmin: state.isAdmin,
+        ttsMode: state.ttsMode,
+        ttsDelayMs: state.ttsDelayMs,
+        ttsStreamingMode: state.ttsStreamingMode,
+        ttsEnabled: state.ttsEnabled,
+        ttsSpeed: state.ttsSpeed,
       }),
     }
   )

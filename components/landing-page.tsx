@@ -6,7 +6,8 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { useAppStore } from "@/lib/store"
 import { useRouter } from "next/navigation"
-import { Theater, Sparkles, User, Trash2, Clock, MapPin, LogOut } from "lucide-react"
+import Link from "next/link"
+import { Theater, Sparkles, User, Trash2, Clock, MapPin, LogOut, ShieldCheck, Copy, Mic } from "lucide-react"
 
 export function LandingPage() {
   const {
@@ -20,6 +21,7 @@ export function LandingPage() {
     loadChatHistory,
     deleteChatHistory,
     goToHome,
+    isAdmin,
   } = useAppStore()
   const [showHistory, setShowHistory] = useState(false)
   const [isMounted, setIsMounted] = useState(false)
@@ -108,6 +110,28 @@ export function LandingPage() {
 
           {/* User Info and Logout */}
           <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-card border border-border" suppressHydrationWarning>
+            <Link href="/my-voices" className="flex items-center" suppressHydrationWarning>
+              <button
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-secondary transition-colors text-sm text-foreground font-medium mr-2"
+                title="내 음성 관리"
+                suppressHydrationWarning
+              >
+                <Mic className="h-4 w-4 text-primary" suppressHydrationWarning />
+                <span suppressHydrationWarning>내 음성</span>
+              </button>
+            </Link>
+            {isAdmin && (
+              <Link href="/admin/voices" className="flex items-center" suppressHydrationWarning>
+                <button
+                   className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-secondary transition-colors text-sm text-foreground font-medium mr-2"
+                   title="관리자 페이지"
+                   suppressHydrationWarning
+                >
+                  <ShieldCheck className="h-4 w-4 text-primary" suppressHydrationWarning />
+                  <span suppressHydrationWarning>관리자</span>
+                </button>
+              </Link>
+            )}
             {userName && (
               <span className="text-sm text-foreground font-medium" suppressHydrationWarning>
                 {userName}
@@ -162,13 +186,39 @@ export function LandingPage() {
                         </div>
                       </div>
                     </div>
-                    <button
-                      onClick={(e) => handleDeleteHistory(history.id, e)}
-                      className="p-2 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-all"
-                      suppressHydrationWarning
-                    >
-                      <Trash2 className="h-4 w-4" suppressHydrationWarning />
-                    </button>
+                    <div className="flex flex-col gap-1 items-center" suppressHydrationWarning>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          const textToCopy = `[시나리오: ${history.scenario.opponent}]\n상황: ${history.scenario.situation}\n\n${history.generatedScript || ""}`
+                          navigator.clipboard.writeText(textToCopy)
+                          // toast가 있다면 사용, 없으면 alert
+                          // landing-page 상단에 toast import 확인 필요
+                          // 여기서는 일단 alert 대신 console.log 후 UI 피드백이 없으면 심심하므로
+                          // window.alert("시나리오가 클립보드에 복사되었습니다.") // 너무 올드함
+                          // sonner 사용 가정
+                          try {
+                            const { toast } = require("sonner")
+                            toast.success("시나리오가 클립보드에 복사되었습니다")
+                          } catch (e) {
+                            alert("복사되었습니다")
+                          }
+                        }}
+                        className="p-2 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-secondary text-muted-foreground hover:text-foreground transition-all"
+                        title="시나리오 복사"
+                        suppressHydrationWarning
+                      >
+                        <Copy className="h-4 w-4" suppressHydrationWarning />
+                      </button>
+                      <button
+                        onClick={(e) => handleDeleteHistory(history.id, e)}
+                        className="p-2 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-all"
+                        title="삭제"
+                        suppressHydrationWarning
+                      >
+                        <Trash2 className="h-4 w-4" suppressHydrationWarning />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))
