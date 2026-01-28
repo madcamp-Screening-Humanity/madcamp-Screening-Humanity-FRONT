@@ -35,7 +35,7 @@ export interface ChatHistory {
   updatedAt: Date
   generatedScript: string
   displayName: string
-  chatModel?: "gemini-2.5-flash" | "glm-4.7-flash"
+  chatModel?: "gemini-2.5-flash" | "gemma-3-27b"
 }
 
 export interface Character {
@@ -65,8 +65,8 @@ interface AppState {
   setDisplayName: (name: string) => void
   gameMode: GameMode | null
   setGameMode: (mode: GameMode) => void
-  chatModel: "gemini-2.5-flash" | "glm-4.7-flash" | null
-  setChatModel: (model: "gemini-2.5-flash" | "glm-4.7-flash" | null) => void
+  chatModel: "gemini-2.5-flash" | "gemma-3-27b" | null
+  setChatModel: (model: "gemini-2.5-flash" | "gemma-3-27b" | null) => void
   avatarUrl: string | null
   setAvatarUrl: (url: string | null) => void
   uploadedImage: string | null
@@ -212,7 +212,7 @@ export const useAppStore = create<AppState>()(
             generatedScript: history.generatedScript,
             displayName: history.displayName || state.userName,
             step: "chat",
-            chatModel: history.chatModel || "glm-4.7-flash",
+            chatModel: history.chatModel || "gemma-3-27b",
           })
         }
       },
@@ -260,7 +260,7 @@ export const useAppStore = create<AppState>()(
       setTtsMode: (mode) => set({ ttsMode: mode }),
       ttsDelayMs: 0,
       setTtsDelayMs: (ms) => set({ ttsDelayMs: ms }),
-      ttsStreamingMode: 0,
+      ttsStreamingMode: 2,
       setTtsStreamingMode: (mode) => set({ ttsStreamingMode: mode }),
       ttsEnabled: true,
       setTtsEnabled: (enabled) => set({ ttsEnabled: enabled }),

@@ -20,6 +20,7 @@ import Link from "next/link"
 import { ServerFileManager } from "./file-manager"
 import { TrainingPanel } from "@/components/admin/voice/training-panel"
 import { CharacterVoiceManagePanel } from "@/components/admin/voice/character-voice-manage-panel"
+import { VoiceListPanel } from "@/components/admin/voice/voice-list-panel"
 
 /**
  * 관리자 음성 관리 페이지
@@ -110,11 +111,11 @@ export default function VoiceManagerPage() {
                 <TabsList className="grid w-full grid-cols-4 max-w-[1000px]">
                     <TabsTrigger value="files" className="flex items-center gap-2">
                         <HardDrive className="h-4 w-4" />
-                        DB 관리
+                        음성 DB & 파일
                     </TabsTrigger>
                     <TabsTrigger value="manage" className="flex items-center gap-2">
                         <Link2 className="h-4 w-4" />
-                        관리
+                        캐릭터 연결
                     </TabsTrigger>
                     <TabsTrigger value="training" className="flex items-center gap-2">
                         <BrainCircuit className="h-4 w-4" />
@@ -126,9 +127,22 @@ export default function VoiceManagerPage() {
                     </TabsTrigger>
                 </TabsList>
 
-                {/* DB 관리 탭 */}
-                <TabsContent value="files">
-                    <ServerFileManager serverFiles={serverFiles} refreshFiles={loadServerFiles} onVoiceCreated={() => { loadVoices(); loadServerFiles(); }} voices={voices} />
+                {/* DB 및 파일 관리 탭 */}
+                <TabsContent value="files" className="space-y-8">
+                    {/* 등록된 음성 목록 관리 */}
+                    <VoiceListPanel 
+                        voices={voices} 
+                        serverFiles={serverFiles}
+                        onRefresh={() => { loadVoices(); loadServerFiles(); }} 
+                    />
+                    
+                    {/* Server A 파일 탐색 및 등록 */}
+                    <ServerFileManager 
+                        serverFiles={serverFiles} 
+                        refreshFiles={loadServerFiles} 
+                        onVoiceCreated={() => { loadVoices(); loadServerFiles(); }} 
+                        voices={voices} 
+                    />
                 </TabsContent>
 
                 {/* 관리 탭: 캐릭터–Voice 연결/교체/해제 */}

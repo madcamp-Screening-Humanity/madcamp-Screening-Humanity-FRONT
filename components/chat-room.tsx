@@ -6,7 +6,7 @@ import { OrbitControls, Environment, ContactShadows } from "@react-three/drei"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useAppStore } from "@/lib/store"
-import { chatApi } from "@/lib/api/client"
+import { chatApi, ttsApi } from "@/lib/api/client"
 import { useToast } from "@/hooks/use-toast"
 import { useTTS } from "@/hooks/use-tts"
 import { TtsSettingsModal } from "@/components/tts-settings-modal"
@@ -119,6 +119,8 @@ export function ChatRoom() {
   const [showTtsSettings, setShowTtsSettings] = useState(false)
   const [currentSpeaker, setCurrentSpeaker] = useState<"character1" | "character2">("character1")
   const [lastProcessedMessageId, setLastProcessedMessageId] = useState<string | null>(null)
+  const [streamingContent, setStreamingContent] = useState<string>("")  // 스트리밍 중인 텍스트
+  const [isStreaming, setIsStreaming] = useState(false)  // 스트리밍 진행 중 여부
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // 턴 제한 및 평가 관련 상태
@@ -159,6 +161,27 @@ export function ChatRoom() {
       setShowHints(false)
     }
   }, [isVisible])
+
+  // TTS 가중치 준비 (채팅방 진입 또는 캐릭터 변경 시)
+  useEffect(() => {
+    if (isVisible && ttsEnabled) {
+      // 1. 선택된 캐릭터 (배우 모드의 상대방 또는 감독 모드의 첫 번째 캐릭터)
+      if (selectedCharacter && selectedCharacter.voice_id) {
+        console.log(`[TTS] Preparing weights for ${selectedCharacter.name} (${selectedCharacter.voice_id})`)
+        ttsApi.prepareTTS(selectedCharacter.voice_id).catch((err) => {
+           console.error(`[TTS] Failed to prepare weights for ${selectedCharacter.name}:`, err)
+        })
+      }
+      
+      // 2. 두 번째 캐릭터 (감독 모드의 상대방)
+      if (secondCharacter && secondCharacter.voice_id) {
+        console.log(`[TTS] Preparing weights for ${secondCharacter.name} (${secondCharacter.voice_id})`)
+        ttsApi.prepareTTS(secondCharacter.voice_id).catch((err) => {
+           console.error(`[TTS] Failed to prepare weights for ${secondCharacter.name}:`, err)
+        })
+      }
+    }
+  }, [isVisible, ttsEnabled, selectedCharacter, secondCharacter])
 
   useEffect(() => {
     if (isVisible && messages.length === 0 && selectedCharacter && sessionId) {
@@ -329,16 +352,8 @@ ${character1Name}을(를) 분석하거나 해석하지 말고, ${character1Name}
                 })
                 incrementTurn()
 
-                if (ttsMode === "realtime" && response.data.audio_url) {
-                  const audioUrl = response.data.audio_url.startsWith("http")
-                    ? response.data.audio_url
-                    : `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}${response.data.audio_url}`
-                  playAudio(audioUrl)
-                } else if (ttsMode === "delayed" && response.data.audio_url) {
-                  const audioUrl = response.data.audio_url.startsWith("http")
-                    ? response.data.audio_url
-                    : `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}${response.data.audio_url}`
-                  setTimeout(() => playAudio(audioUrl), ttsDelayMs)
+                if (response.data.audio_url) {
+                  handleTTS(response.data.audio_url)
                 }
               } else {
                 throw new Error(response?.error?.message || "초기 메시지 생성 실패")
@@ -504,6 +519,21 @@ ${nextOpponent?.name}을(를) 분석하거나 해석하지 말고, ${nextOpponen
     }
   }, [])
 
+  const handleTTS = useCallback((url: string | undefined) => {
+    if (!url || !ttsEnabled) return
+    const audioUrl = url.startsWith("http") ? url : `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}${url}`
+    
+    if (ttsMode === "realtime") {
+      toast({ description: "🔊 음성이 재생됩니다." })
+      playAudio(audioUrl)
+    } else if (ttsMode === "delayed") {
+      toast({ description: "🔊 잠시 후 음성이 재생됩니다." })
+      setTimeout(() => playAudio(audioUrl), ttsDelayMs)
+    } else {
+      toast({ description: "🔊 음성이 준비되었습니다." })
+    }
+  }, [ttsEnabled, ttsMode, ttsDelayMs, playAudio, toast])
+
   const handleSend = useCallback(async () => {
     if (!input.trim() || turnCount >= maxTurns || !sessionId) return
 
@@ -599,15 +629,7 @@ ${opponentCharacter?.name}을(를) 분석하거나 해석하지 말고, ${oppone
           saveChatHistory()
 
           if (response.data.audio_url) {
-            const audioUrl = response.data.audio_url.startsWith("http")
-              ? response.data.audio_url
-              : `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}${response.data.audio_url}`
-
-            if (ttsMode === "realtime") {
-              setTimeout(() => playAudio(audioUrl), 100)
-            } else if (ttsMode === "delayed" && ttsDelayMs > 0) {
-              setTimeout(() => playAudio(audioUrl), ttsDelayMs)
-            }
+            handleTTS(response.data.audio_url)
           }
 
           setLastProcessedMessageId(aiMessage.id) // 처리한 메시지 ID 저장
@@ -623,7 +645,7 @@ ${opponentCharacter?.name}을(를) 분석하거나 해석하지 말고, ${oppone
         setIsAiTyping(false)
       }
     } else {
-      // 주연 모드: 기존 로직
+      // 주연 모드: Gemini일 때 스트리밍, Ollama일 때 기존 방식
       const userMessage = {
         id: Date.now().toString(),
         role: "user" as const,
@@ -634,84 +656,162 @@ ${opponentCharacter?.name}을(를) 분석하거나 해석하지 말고, ${oppone
       addMessage(userMessage)
       incrementTurn()
 
-      try {
-        const response = await retryWithBackoff(async () => {
-          const result = await chatApi.chat({
-            messages: [
-              ...messages.map((msg) => ({
-                role: (msg.role === "user" ? "user" : "assistant") as "user" | "assistant" | "system",
-                content: msg.content,
-              })),
-              { role: "user" as const, content: currentInput },
-            ],
-            persona: buildSystemPersona(selectedCharacter!, scenario.background || generatedScript || scenario.situation) || undefined,
-            character_id: selectedCharacter?.id,
-            scenario: {
-              opponent: scenario.opponent,
-              situation: generatedScript || scenario.situation,
+      // Gemini 모델일 때 스트리밍 사용
+      if (isGemini) {
+        setIsStreaming(true)
+        setStreamingContent("")
+
+        try {
+          await chatApi.chatStream(
+            {
+              messages: [
+                ...messages.map((msg) => ({
+                  role: (msg.role === "user" ? "user" : "assistant") as "user" | "assistant" | "system",
+                  content: msg.content,
+                })),
+                { role: "user" as const, content: currentInput },
+              ],
+              persona: buildSystemPersona(selectedCharacter!, scenario.background || generatedScript || scenario.situation) || undefined,
+              character_id: selectedCharacter?.id,
+              scenario: {
+                opponent: scenario.opponent,
+                situation: generatedScript || scenario.situation,
+              },
+              session_id: sessionId || undefined,
+              temperature: 0.7,
+              max_tokens: 512,
+              model: chatModel || undefined,
             },
-            session_id: sessionId || undefined,
-            tts_enabled: ttsEnabled,
-            tts_mode: ttsMode,
-            tts_delay_ms: ttsDelayMs,
-            tts_streaming_mode: ttsStreamingMode,
-            tts_speed: ttsSpeed,
-            temperature: 0.7,
-            max_tokens: 512,
-            model: chatModel || undefined,
-          })
-          if (!result || !result.success || !result.data?.content) {
-            throw new Error(result?.error?.message || "채팅 응답 실패")
-          }
-          return result
-        }, 3, 1000)
+            // onChunk: 각 청크 수신 시
+            (chunk) => {
+              setStreamingContent((prev) => prev + chunk)
+            },
+            // onComplete: 전체 응답 완료 시
+            (fullText) => {
+              const aiMessage = {
+                id: (Date.now() + 1).toString(),
+                role: "assistant" as const,
+                content: fullText.trim(),
+                timestamp: new Date(),
+              }
+              addMessage(aiMessage)
+              incrementTurn()
+              saveChatHistory()
 
-        if (response.success && response.data) {
-          const aiMessage = {
-            id: (Date.now() + 1).toString(),
-            role: "assistant" as const,
-            content: response.data.content.trim(),
-            audio_url: response.data.audio_url,
-            timestamp: new Date(),
-          }
-          addMessage(aiMessage)
-          incrementTurn()
-          saveChatHistory()
+              // TTS 생성 (스트리밍 완료 후)
+              if (ttsEnabled && fullText.trim()) {
+                 const targetCharacter = selectedCharacter
+                 if (targetCharacter?.voice_id) {
+                     toast({ description: "🔊 음성을 생성 중입니다..." })
+                     ttsApi.generateSpeech({
+                         text: fullText.trim(),
+                         voice_id: targetCharacter.voice_id,
+                         speed: ttsSpeed,
+                         streaming_mode: ttsStreamingMode,
+                     }).then(res => {
+                         if (res.success && res.data?.audio_url) {
+                             handleTTS(res.data.audio_url)
+                         }
+                     }).catch(err => console.error(err))
+                 }
+              }
 
-          if (response.data.audio_url) {
-            const audioUrl = response.data.audio_url.startsWith("http")
-              ? response.data.audio_url
-              : `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}${response.data.audio_url}`
+              setStreamingContent("")
+              setIsStreaming(false)
+              setIsAiTyping(false)
+            },
+            // onError: 오류 발생 시
+            (error) => {
+              console.error("스트리밍 오류:", error)
+              setStreamingContent("")
+              setIsStreaming(false)
+              setIsAiTyping(false)
+              toast({
+                title: "채팅 오류",
+                description: error.message,
+                variant: "destructive",
+              })
+            }
+          )
+        } catch (error) {
+          console.error("스트리밍 시작 오류:", error)
+          setStreamingContent("")
+          setIsStreaming(false)
+          setIsAiTyping(false)
+        }
+      } else {
+        // Ollama 등 비-Gemini 모델: 기존 방식 유지
+        try {
+          const response = await retryWithBackoff(async () => {
+            const result = await chatApi.chat({
+              messages: [
+                ...messages.map((msg) => ({
+                  role: (msg.role === "user" ? "user" : "assistant") as "user" | "assistant" | "system",
+                  content: msg.content,
+                })),
+                { role: "user" as const, content: currentInput },
+              ],
+              persona: buildSystemPersona(selectedCharacter!, scenario.background || generatedScript || scenario.situation) || undefined,
+              character_id: selectedCharacter?.id,
+              scenario: {
+                opponent: scenario.opponent,
+                situation: generatedScript || scenario.situation,
+              },
+              session_id: sessionId || undefined,
+              tts_enabled: ttsEnabled,
+              tts_mode: ttsMode,
+              tts_delay_ms: ttsDelayMs,
+              tts_streaming_mode: ttsStreamingMode,
+              tts_speed: ttsSpeed,
+              temperature: 0.7,
+              max_tokens: 512,
+              model: chatModel || undefined,
+            })
+            if (!result || !result.success || !result.data?.content) {
+              throw new Error(result?.error?.message || "채팅 응답 실패")
+            }
+            return result
+          }, 3, 1000)
 
-            if (ttsMode === "realtime") {
-              setTimeout(() => playAudio(audioUrl), 100)
-            } else if (ttsMode === "delayed" && ttsDelayMs > 0) {
-              setTimeout(() => playAudio(audioUrl), ttsDelayMs)
+          if (response.success && response.data) {
+            const aiMessage = {
+              id: (Date.now() + 1).toString(),
+              role: "assistant" as const,
+              content: response.data.content.trim(),
+              audio_url: response.data.audio_url,
+              timestamp: new Date(),
+            }
+            addMessage(aiMessage)
+            incrementTurn()
+            saveChatHistory()
+
+            if (response.data.audio_url) {
+              handleTTS(response.data.audio_url)
             }
           }
+        } catch (error) {
+          console.error("채팅 오류:", error)
+          toast({
+            title: "채팅 오류",
+            description: error instanceof Error ? error.message : "오류가 발생했습니다.",
+            variant: "destructive",
+          })
+        } finally {
+          setIsAiTyping(false)
         }
-      } catch (error) {
-        console.error("채팅 오류:", error)
-        toast({
-          title: "채팅 오류",
-          description: error instanceof Error ? error.message : "오류가 발생했습니다.",
-          variant: "destructive",
-        })
-      } finally {
-        setIsAiTyping(false)
       }
     }
-  }, [input, turnCount, maxTurns, sessionId, messages, selectedCharacter, secondCharacter, isDirectorMode, currentSpeaker, scenario, ttsEnabled, ttsMode, ttsDelayMs, ttsStreamingMode, ttsSpeed, addMessage, incrementTurn, saveChatHistory, playAudio, retryWithBackoff, toast, generatedScript, character1Name, character2Name, chatModel])
+  }, [input, turnCount, maxTurns, sessionId, messages, selectedCharacter, secondCharacter, isDirectorMode, currentSpeaker, scenario, ttsEnabled, ttsMode, ttsDelayMs, ttsStreamingMode, ttsSpeed, addMessage, incrementTurn, saveChatHistory, playAudio, retryWithBackoff, toast, generatedScript, character1Name, character2Name, chatModel, isGemini])
 
   const handleMessageClick = useCallback((message: { id: string; audio_url?: string }) => {
-    if (ttsMode === "on_click" && message.audio_url) {
+    if (message.audio_url) {
       const audioUrl = message.audio_url.startsWith("http")
         ? message.audio_url
         : `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}${message.audio_url}`
       playAudio(audioUrl)
       setPlayingMessageId(message.id)
     }
-  }, [ttsMode, playAudio])
+  }, [playAudio])
 
   const handleHintSelect = (hint: string) => {
     setInput(hint)
@@ -790,7 +890,7 @@ ${opponentCharacter?.name}을(를) 분석하거나 해석하지 말고, ${oppone
       const response = await chatApi.chat({
         messages: messagesForEval,
         character_id: selectedCharacter!.id,
-        session_id: sessionId,
+        session_id: sessionId || undefined,
         temperature: 0.7,
         max_tokens: 512,
         scenario: { opponent: scenario.opponent || "", situation: "" },
@@ -990,7 +1090,7 @@ ${opponentCharacter?.name}을(를) 분석하거나 해석하지 말고, ${oppone
                       : msg.role === "user"
                         ? "bg-primary text-primary-foreground rounded-br-md"
                         : "bg-card border border-border rounded-bl-md text-foreground"
-                      } ${ttsMode === "on_click" && msg.audio_url ? "cursor-pointer" : ""}`}
+                      } ${msg.audio_url ? "cursor-pointer" : ""}`}
                     onClick={() => handleMessageClick(msg)}
                   >
                     <p className="whitespace-pre-wrap break-words">
@@ -1010,8 +1110,23 @@ ${opponentCharacter?.name}을(를) 분석하거나 해석하지 말고, ${oppone
         })}
         {isAiTyping && (
           <div className="flex justify-start">
-            <div className="px-4 py-3 rounded-2xl bg-card border border-border rounded-bl-md animate-pulse text-xs text-muted-foreground">
-              AI가 응답을 생성하는 중입니다...
+            <div className="max-w-[80%] flex flex-col">
+              {isStreaming && streamingContent ? (
+                <>
+                  <span className="text-xs text-muted-foreground mb-1 px-1 flex items-center gap-1">
+                    {selectedCharacter?.name || "AI"}
+                    <span className="inline-block w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
+                  </span>
+                  <div className="px-4 py-3 rounded-2xl bg-card border border-border rounded-bl-md text-foreground">
+                    <p className="whitespace-pre-wrap break-words">{streamingContent}</p>
+                    <span className="inline-block w-2 h-4 bg-primary/50 animate-pulse ml-0.5" />
+                  </div>
+                </>
+              ) : (
+                <div className="px-4 py-3 rounded-2xl bg-card border border-border rounded-bl-md animate-pulse text-xs text-muted-foreground">
+                  AI가 응답을 생성하는 중입니다...
+                </div>
+              )}
             </div>
           </div>
         )}

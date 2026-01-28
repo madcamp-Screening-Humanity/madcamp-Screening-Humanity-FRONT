@@ -71,7 +71,7 @@ export function CharacterSelectModal() {
     setLoading(true)
     try {
       console.log("저장된 캐릭터 로드 시작...")
-      const response = await characterApi.listUserCharacters()
+      const response = await characterApi.listMyCharacters()
       console.log("저장된 캐릭터 응답:", response)
 
       if (response.success && response.data) {
@@ -232,6 +232,19 @@ export function CharacterSelectModal() {
       })
     }
   }, [loadSavedCharacters, toast])
+
+  const handleConfirm = useCallback(() => {
+    if (confirmingCharacter) {
+      handleCharacterSelect(confirmingCharacter)
+      setShowConfirm(false)
+      setConfirmingCharacter(null)
+    }
+  }, [confirmingCharacter, handleCharacterSelect])
+
+  const handleCancel = useCallback(() => {
+    setShowConfirm(false)
+    setConfirmingCharacter(null)
+  }, [])
 
   const handleClose = useCallback(() => {
     setStep("mode-select")

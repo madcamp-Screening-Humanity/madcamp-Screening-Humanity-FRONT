@@ -86,7 +86,7 @@ export const chatApi = {
                 credentials: 'include',  // 쿠키 전달 (get_current_user_optional, 비로그인 시 None)
                 body: JSON.stringify({
                     messages: request.messages,
-                    model: request.model || 'glm-4.7-flash',
+                    model: request.model || 'gemma-3-27b',
                     temperature: request.temperature || 0.7,
                     max_tokens: request.max_tokens || 512,
                     persona: request.persona,
@@ -175,10 +175,128 @@ export const chatApi = {
         });
         return handleResponse(response);
     },
+
+    /**
+     * SSE 스트리밍 채팅 요청
+     * 실시간으로 청크 단위 응답을 받아 체감 속도 향상
+     * @param request 채팅 요청 데이터
+     * @param onChunk 각 청크 수신 시 호출되는 콜백
+     * @param onComplete 전체 응답 완료 시 호출되는 콜백
+     * @param onError 오류 발생 시 호출되는 콜백
+     */
+    async chatStream(
+        request: ChatRequest,
+        onChunk: (text: string) => void,
+        onComplete: (fullText: string, sessionId?: string) => void,
+        onError?: (error: Error) => void
+    ): Promise<void> {
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 180000);
+
+            const response = await fetch(`${API_V1}/chat/stream`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({
+                    messages: request.messages,
+                    model: request.model || 'gemini-2.5-flash',
+                    temperature: request.temperature || 0.7,
+                    max_tokens: request.max_tokens || 512,
+                    persona: request.persona,
+                    scenario: request.scenario,
+                    session_id: request.session_id,
+                    character_id: request.character_id,
+                    director_note: request.director_note,
+                    current_speaker: request.current_speaker,
+                }),
+                signal: controller.signal,
+            });
+
+            clearTimeout(timeoutId);
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const reader = response.body?.getReader();
+            if (!reader) {
+                throw new Error('ReadableStream을 지원하지 않는 브라우저입니다.');
+            }
+
+            const decoder = new TextDecoder();
+            let fullText = '';
+            let sessionId: string | undefined;
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                const lines = chunk.split('\n');
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.slice(6));
+                            
+                            if (data.error) {
+                                throw new Error(data.error);
+                            }
+                            
+                            if (data.done) {
+                                // 완료 시 전체 텍스트와 세션 ID 반환
+                                sessionId = data.session_id;
+                                if (data.full_content) {
+                                    fullText = data.full_content;
+                                }
+                            } else if (data.content) {
+                                // 청크 수신
+                                fullText += data.content;
+                                onChunk(data.content);
+                            }
+                        } catch (e) {
+                            // JSON 파싱 실패 시 무시 (불완전한 청크)
+                            if (!(e instanceof SyntaxError)) {
+                                throw e;
+                            }
+                        }
+                    }
+                }
+            }
+
+            onComplete(fullText, sessionId);
+
+        } catch (error) {
+            if (error instanceof Error) {
+                if (error.name === 'AbortError') {
+                    onError?.(new Error('스트리밍 요청 시간이 초과되었습니다. (180초)'));
+                } else {
+                    onError?.(error);
+                }
+            } else {
+                onError?.(new Error('알 수 없는 오류가 발생했습니다.'));
+            }
+        }
+    },
 };
 
 // ============ TTS API ============
 export const ttsApi = {
+    /**
+     * TTS 모델 가중치 미리 로드 (채팅 준비)
+     * @param voiceId 음성 ID
+     */
+    async prepareTTS(voiceId: string): Promise<ApiResponse<{ message: string }>> {
+        const response = await fetch(`${API_V1}/tts/prepare`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ voice_id: voiceId }),
+        });
+        return handleResponse<{ message: string }>(response);
+    },
+
     /**
      * Text-to-Speech 생성
      */
@@ -724,21 +842,20 @@ export const characterApi = {
     },
 
     /**
-     * AI를 사용하여 캐릭터 상세 정보 자동 생성
+     * 캐릭터 상세 설정 자동 생성 (AI)
+     * Backend API (/generate/character-details)를 호출하여 Gemini/Ollama Fallback 적용
      */
-    async generateCharacterDetails(request: {
-        name: string;
-        description?: string;
-        category?: string;
-    }): Promise<ApiResponse<Partial<Character>>> {
-        const response = await fetch(`${API_V1}/characters/generate`, {
+    async generateCharacterDetails(request: CreateCharacterRequest): Promise<ApiResponse<import('./types').CharacterGenerationResponse>> {
+        const response = await fetch(`${API_V1}/generate/character-details`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
             body: JSON.stringify(request),
         });
-        return handleResponse<Partial<Character>>(response);
+        return handleResponse<import('./types').CharacterGenerationResponse>(response);
     },
+
+
 
     /**
      * 캐릭터 생성

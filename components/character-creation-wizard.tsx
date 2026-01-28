@@ -8,7 +8,6 @@ import { Textarea } from "@/components/ui/textarea"
 import { ArrowLeft, ArrowRight, Loader2, Sparkles, AlertCircle, Play, Pause, RefreshCw } from "lucide-react"
 import { characterApi, voiceApi } from "@/lib/api/client"
 import { useToast } from "@/hooks/use-toast"
-import { generateCharacterSpec } from "@/lib/api/gemini"
 import type { Character, CreateCharacterRequest, VoiceLinkOption } from "@/lib/api/types"
 
 interface CharacterCreationWizardProps {
@@ -182,11 +181,19 @@ export function CharacterCreationWizard({
     }
 
     try {
-      const spec = await generateCharacterSpec({
+      const response = await characterApi.generateCharacterDetails({
         name: characterName,
         category: category,
         source_work: sourceWork,
+        description: description, // 사용자가 입력한 초기 설명도 전달
+        worldview: worldview // 사용자가 입력한 세계관도 전달
       })
+
+      if (!response.success || !response.data) {
+          throw new Error(response.error?.message || "AI 생성 실패");
+      }
+
+      const spec = response.data.data; // CharacterGenerationResponse.data -> CharacterSpecResponse
 
       // 필드 채우기
       if (spec.gender) setGender(spec.gender)
@@ -194,13 +201,14 @@ export function CharacterCreationWizard({
       if (spec.age) setAge(spec.age)
       if (spec.height) setHeight(spec.height)
       if (spec.job) setJob(spec.job)
+      // 세계관은 사용자가 입력하지 않았거나, AI가 생성한 내용이 더 길 경우 덮어쓰기 고려 (여기서는 덮어쓰기)
       if (spec.worldview) setWorldview(spec.worldview)
       
       setPersonality(spec.personality)
       setAppearance(spec.appearance)
       setDescription(spec.description)
-      setLikes(spec.likes.join(", "))
-      setDislikes(spec.dislikes.join(", "))
+      setLikes(Array.isArray(spec.likes) ? spec.likes.join(", ") : spec.likes || "")
+      setDislikes(Array.isArray(spec.dislikes) ? spec.dislikes.join(", ") : spec.dislikes || "")
       setSpeechStyle(spec.speech_style)
       setThoughts(spec.thoughts)
       setFeatures(spec.features)
@@ -208,10 +216,20 @@ export function CharacterCreationWizard({
       setGuidelines(spec.guidelines)
 
       setIsAiGenerated(true)
-      toast({
-        title: "생성 완료",
-        description: "AI가 상세 정보를 채웠습니다.",
-      })
+      
+      if (response.data.is_fallback) {
+          toast({
+              title: "AI 생성 완료 (Local Mode)",
+              description: "Gemini 사용량이 많아 로컬 AI(Gemma 3)로 생성되었습니다. 결과가 다소 투박할 수 있습니다.",
+              variant: "default", 
+          })
+      } else {
+          toast({
+              title: "AI 생성 완료",
+              description: "캐릭터 상세 정보가 생성되었습니다.",
+          })
+      }
+
     } catch (error) {
       console.error("AI Generation Failed:", error)
       toast({

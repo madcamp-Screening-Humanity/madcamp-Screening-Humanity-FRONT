@@ -440,6 +440,33 @@ export interface CreateCharacterRequest {
     image_url?: string;
 }
 
+// AI 캐릭터 스펙 생성 응답 (Frontend용)
+export interface CharacterSpecResponse {
+    name: string;
+    gender: string;
+    species: string;
+    age: string;
+    height: string;
+    job: string;
+    worldview: string;
+    personality: string;
+    appearance: string;
+    description: string;
+    likes: string[];
+    dislikes: string[];
+    speech_style: string;
+    thoughts: string;
+    features: string;
+    habits: string;
+    guidelines: string;
+}
+
+// Backend API 응답 (/generate/character-details)
+export interface CharacterGenerationResponse {
+    is_fallback: boolean;
+    data: CharacterSpecResponse;
+}
+
 // 캐릭터 업데이트 요청 - 상세 필드 지원
 export interface UpdateCharacterRequest {
     name?: string;

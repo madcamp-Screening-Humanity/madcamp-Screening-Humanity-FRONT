@@ -14,7 +14,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { Zap, Infinity, Bot } from "lucide-react"
 
-type LlmModel = "gemini-2.5-flash" | "glm-4.7-flash"
+type LlmModel = "gemini-2.5-flash" | "gemma-3-27b"
 
 interface LlmSelectModalProps {
   open: boolean
@@ -71,21 +71,21 @@ export function LlmSelectModal({ open, onOpenChange, onSelect }: LlmSelectModalP
               </div>
             </Label>
 
-            {/* GLM-4.7-Flash (31B) */}
+            {/* Gemma 3 (27B) */}
             <Label
-              htmlFor="glm-4"
-              className={`flex items-start justify-between p-4 rounded-xl border-2 cursor-pointer transition-all hover:bg-secondary/30 ${selectedModel === "glm-4.7-flash" ? "border-primary bg-secondary/50" : "border-border"
+              htmlFor="gemma-3-27b"
+              className={`flex items-start justify-between p-4 rounded-xl border-2 cursor-pointer transition-all hover:bg-secondary/30 ${selectedModel === "gemma-3-27b" ? "border-primary bg-secondary/50" : "border-border"
                 }`}
             >
               <div className="flex items-start gap-3">
-                <RadioGroupItem value="glm-4.7-flash" id="glm-4" className="mt-1" />
+                <RadioGroupItem value="gemma-3-27b" id="gemma-3-27b" className="mt-1" />
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-foreground">GLM-4.7-Flash (31B)</span>
+                    <span className="font-semibold text-foreground">Gemma 3 (27B)</span>
                     <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-500">LOCAL</span>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    로컬 서버에서 구동되는 고성능 모델 (31B).
+                    로컬 서버에서 구동되는 고성능 모델 (27B).
                   </p>
                   <p className="text-xs font-medium text-blue-500 flex items-center gap-1">
                     <Infinity className="h-3 w-3" />

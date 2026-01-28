@@ -166,7 +166,7 @@ ${finalName}(으)로서 자연스럽게 대화를 이어가세요.
     setShowLlmModal(true)
   }
 
-  const handleModelSelect = (model: "gemini-2.5-flash" | "glm-4.7-flash") => {
+  const handleModelSelect = (model: "gemini-2.5-flash" | "gemma-3-27b") => {
     setChatModel(model)
     // 새로운 대화 시작 시 상태 초기화
     useAppStore.setState({
