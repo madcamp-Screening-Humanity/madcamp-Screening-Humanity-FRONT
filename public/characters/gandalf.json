@@ -56,5 +56,6 @@
     "선량함"
   ],
   "image_url": "/images/characters/gandalf.jpg",
-  "is_preset": true
+  "is_preset": true,
+  "voice_id": "5303d46c-324d-4070-ba5a-086699420be3"
 }
